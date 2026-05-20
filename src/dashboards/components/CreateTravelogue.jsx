@@ -1,23 +1,40 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  Box, Button, TextField, Typography, Rating, Chip, Stack, Paper, Alert, Snackbar, Grid, IconButton, Tooltip, Stepper, Step, StepLabel, Card, Divider, InputAdornment
+  Box, Button, TextField, Typography, Rating, Chip, Stack, Paper, Alert, Snackbar, IconButton, Tooltip, Stepper, Step, StepLabel, Card, Divider, InputAdornment, useTheme
 } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import Grid from '@mui/material/GridLegacy';
+import { alpha } from '@mui/material/styles';
+import dayjs from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PhotoCamera from '@mui/icons-material/PhotoCamera';
 import SaveIcon from '@mui/icons-material/SaveAltOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import GroupIcon from '@mui/icons-material/Group';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import WbSunnyIcon from '@mui/icons-material/WbSunny';
+import StarIcon from '@mui/icons-material/Star';
+import CloseIcon from '@mui/icons-material/Close';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
 
-const steps = ['Story', 'Media', 'Trip Details', 'Review & Submit'];
-const difficulties = ['easy', 'moderate', 'challenging'];
+const steps = ['Write Story', 'Media Upload', 'Trip Details', 'Review & Publish'];
 const seasons = ['Spring', 'Summer', 'Fall', 'Winter'];
 
 export default function CreateTravelogue() {
   const theme = useTheme();
   const [activeStep, setActiveStep] = useState(0);
+  // Scroll to top when step changes for better UX
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeStep]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -27,10 +44,8 @@ export default function CreateTravelogue() {
     tags: [],
     startDate: '',
     endDate: '',
-    duration: '',
     travelersCount: 1,
     estimatedCost: '',
-    difficulty: 'moderate',
     season: '',
     highlights: []
   });
@@ -38,6 +53,7 @@ export default function CreateTravelogue() {
   const [media, setMedia] = useState([]);
   const [tagInput, setTagInput] = useState('');
   const [highlightInput, setHighlightInput] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -52,25 +68,67 @@ export default function CreateTravelogue() {
           : 'rgba(255,255,255,0.85)',
       backdropFilter: 'blur(8px)',
       borderColor: alpha(theme.palette.text.primary, 0.08),
-      '&:hover fieldset': { borderColor: theme.palette.primary.main, borderWidth: '2px' },
-      '&.Mui-focused fieldset': { borderColor: theme.palette.primary.main, borderWidth: '2px' }
+      '&:hover fieldset': { borderColor: '#4F8A8B', borderWidth: '1.5px' },
+      '&.Mui-focused fieldset': { borderColor: '#4F8A8B', borderWidth: '2px' }
     }
   };
 
   const sectionCardSx = {
     borderRadius: '18px',
-    border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
-    bgcolor: theme.palette.background.paper,
-    boxShadow:
-      theme.palette.mode === 'dark'
-        ? '0 18px 40px rgba(0,0,0,0.35)'
-        : '0 18px 40px rgba(15,23,42,0.06)',
-    p: { xs: 2.5, md: 3 }
+    border: '1px solid rgba(148, 163, 184, 0.12)',
+    bgcolor: '#ffffff',
+    boxShadow: '0 10px 30px rgba(15,23,42,0.03)',
+    p: { xs: 2, md: 2.5 }
+  };
+
+  const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayDate = useMemo(() => dayjs(todayIso), [todayIso]);
+  const computedDuration = useMemo(() => {
+    if (!formData.startDate || !formData.endDate) return '';
+
+    const start = new Date(`${formData.startDate}T00:00:00`);
+    const end = new Date(`${formData.endDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return '';
+
+    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays > 0 ? diffDays : '';
+  }, [formData.startDate, formData.endDate]);
+
+  const datePickerFieldSx = {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '14px',
+      background: 'rgba(255,255,255,0.92)',
+      border: '1px solid rgba(79,138,139,0.18)',
+      boxShadow: '0 4px 12px rgba(15,23,42,0.03)',
+      '&:hover fieldset': { borderColor: '#4F8A8B' },
+      '&.Mui-focused fieldset': { borderColor: '#4F8A8B', borderWidth: '2px' }
+    },
+    '& .MuiInputBase-input': {
+      fontWeight: 600,
+      color: '#0F172A'
+    }
   };
 
   const handleMediaChange = (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     setMedia([...media, ...files]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    const validFiles = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    setMedia([...media, ...validFiles]);
   };
 
   const handleRemoveMedia = (idx) => {
@@ -78,10 +136,11 @@ export default function CreateTravelogue() {
   };
 
   const handleAddTag = () => {
-    if (tagInput && !formData.tags.includes(tagInput)) {
+    const cleanTag = tagInput.trim().toLowerCase();
+    if (cleanTag && !formData.tags.includes(cleanTag)) {
       setFormData({
         ...formData,
-        tags: [...formData.tags, tagInput]
+        tags: [...formData.tags, cleanTag]
       });
       setTagInput('');
     }
@@ -95,10 +154,11 @@ export default function CreateTravelogue() {
   };
 
   const handleAddHighlight = () => {
-    if (highlightInput && !formData.highlights.includes(highlightInput)) {
+    const cleanHighlight = highlightInput.trim();
+    if (cleanHighlight && !formData.highlights.includes(cleanHighlight)) {
       setFormData({
         ...formData,
-        highlights: [...formData.highlights, highlightInput]
+        highlights: [...formData.highlights, cleanHighlight]
       });
       setHighlightInput('');
     }
@@ -113,7 +173,80 @@ export default function CreateTravelogue() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData((prev) => {
+      let nextValue = value;
+
+      if (name === 'travelersCount') {
+        const parsed = Number.parseInt(nextValue, 10);
+        nextValue = Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+      }
+
+      if ((name === 'startDate' || name === 'endDate') && nextValue && nextValue > todayIso) {
+        nextValue = todayIso;
+      }
+
+      const next = { ...prev, [name]: nextValue };
+
+      if (name === 'startDate' && next.endDate && next.endDate < next.startDate) {
+        next.endDate = next.startDate;
+      }
+
+      if (name === 'endDate' && next.startDate && next.endDate < next.startDate) {
+        next.startDate = next.endDate;
+      }
+
+      return next;
+    });
+  };
+
+  const handleStartDateChange = (newValue) => {
+    setFormData((prev) => {
+      if (!newValue || !dayjs(newValue).isValid()) {
+        return { ...prev, startDate: '', endDate: '' };
+      }
+
+      let nextStart = dayjs(newValue).startOf('day');
+      if (nextStart.isAfter(todayDate, 'day')) {
+        nextStart = todayDate;
+      }
+
+      const nextStartIso = nextStart.format('YYYY-MM-DD');
+      let nextEndIso = prev.endDate;
+      if (nextEndIso && dayjs(nextEndIso).isBefore(nextStart, 'day')) {
+        nextEndIso = nextStartIso;
+      }
+
+      return {
+        ...prev,
+        startDate: nextStartIso,
+        endDate: nextEndIso
+      };
+    });
+  };
+
+  const handleEndDateChange = (newValue) => {
+    setFormData((prev) => {
+      if (!newValue || !dayjs(newValue).isValid()) {
+        return { ...prev, endDate: '' };
+      }
+
+      let nextEnd = dayjs(newValue).startOf('day');
+      if (nextEnd.isAfter(todayDate, 'day')) {
+        nextEnd = todayDate;
+      }
+
+      if (prev.startDate) {
+        const start = dayjs(prev.startDate).startOf('day');
+        if (nextEnd.isBefore(start, 'day')) {
+          nextEnd = start;
+        }
+      }
+
+      return {
+        ...prev,
+        endDate: nextEnd.format('YYYY-MM-DD')
+      };
+    });
   };
 
   const handleNext = () => {
@@ -141,13 +274,17 @@ export default function CreateTravelogue() {
         }
       });
 
+      if (computedDuration) {
+        submitData.append('duration', String(computedDuration));
+      }
+
       // Add media files
       media.forEach(file => {
         submitData.append('media', file);
       });
 
       const endpoint = asDraft ? '/travelogue/draft' : '/travelogue/create';
-      const response = await api.post(endpoint, submitData, {
+      await api.post(endpoint, submitData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
@@ -156,11 +293,13 @@ export default function CreateTravelogue() {
         // Reset form
         setFormData({
           title: '', description: '', destination: '', location: '', rating: 0, tags: [],
-          startDate: '', endDate: '', duration: '', travelersCount: 1, estimatedCost: '',
-          difficulty: 'moderate', season: '', highlights: []
+          startDate: '', endDate: '', travelersCount: 1, estimatedCost: '',
+          season: '', highlights: []
         });
         setMedia([]);
         setActiveStep(0);
+        // Switch back to feed view
+        window.dispatchEvent(new CustomEvent('travelogueSubTab', { detail: { tab: 'explore' } }));
       }, 1500);
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to submit travelogue.');
@@ -170,9 +309,9 @@ export default function CreateTravelogue() {
   };
 
   const isStepValid = () => {
-    if (activeStep === 0) return formData.title && formData.description && formData.destination;
+    if (activeStep === 0) return formData.title.trim() && formData.description.trim() && formData.destination.trim();
     if (activeStep === 1) return media.length > 0;
-    if (activeStep === 2) return formData.startDate && formData.endDate;
+    if (activeStep === 2) return formData.startDate && formData.endDate && !!computedDuration;
     return true;
   };
 
@@ -180,169 +319,153 @@ export default function CreateTravelogue() {
     <Box
       sx={{
         width: '100%',
-        minHeight: '100vh',
-        bgcolor: theme.palette.background.default,
-        pb: 4,
-        backgroundImage:
-          theme.palette.mode === 'dark'
-            ? 'radial-gradient(circle at top, rgba(79,138,139,0.16), transparent 55%)'
-            : 'radial-gradient(circle at top, rgba(79,138,139,0.14), transparent 55%)'
+        minHeight: 'auto',
+        bgcolor: '#F8FAFB',
+        pb: 2
       }}
     >
       <Box sx={{ maxWidth: 1120, mx: 'auto', px: { xs: 2, sm: 2.5, md: 3 } }}>
-        {/* Header */}
+        
+        {/* Header Cover Banner */}
         <Paper
           elevation={0}
           sx={{
-            borderRadius: '24px',
+            borderRadius: '20px',
             overflow: 'hidden',
-            boxShadow:
-              theme.palette.mode === 'dark'
-                ? '0 18px 50px rgba(0,0,0,0.45)'
-                : '0 16px 50px rgba(15,23,42,0.08)',
-            bgcolor: theme.palette.background.paper,
-            mt: 1.5,
-            mb: 3
+            boxShadow: '0 12px 32px rgba(15,23,42,0.05)',
+            background: '#ffffff',
+            color: '#0F172A',
+            mt: 1,
+            mb: 2,
+            border: '1px solid rgba(148, 163, 184, 0.12)'
           }}
         >
-          {/* Premium Cover */}
+          {/* Cover Artwork */}
           <Box
-            sx={{
-              height: { xs: 180, sm: 200, md: 220 },
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(120deg, #0B1120 0%, #1F2937 45%, #0F766E 100%)'
-                  : 'linear-gradient(120deg, #0F172A 0%, #4F8A8B 45%, #6BA8AC 100%)',
-              position: 'relative',
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              '&::before': {
+              sx={{
+                height: { xs: 92, sm: 104, md: 114 },
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                p: { xs: 2, sm: 2.5, md: 3 },
+                '&::before': {
                 content: '""',
                 position: 'absolute',
                 top: 0,
                 right: 0,
-                width: '40%',
+                width: '320px',
                 height: '100%',
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'radial-gradient(circle at 100% 50%, rgba(249,237,105,0.12), transparent)'
-                    : 'radial-gradient(circle at 100% 50%, rgba(249,237,105,0.2), transparent)',
+                background: 'radial-gradient(circle, rgba(79, 138, 139, 0.2) 0%, transparent 70%)',
                 pointerEvents: 'none'
-              },
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                bottom: -40,
-                left: -40,
-                width: 160,
-                height: 160,
-                borderRadius: '50%',
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%)'
-                    : 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%)'
               }
             }}
           >
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={2.5}
-              alignItems={{ xs: 'center', md: 'flex-start' }}
-              sx={{ zIndex: 1, textAlign: { xs: 'center', md: 'left' } }}
-            >
+            <Stack direction="row" spacing={3} alignItems="center" sx={{ zIndex: 2 }}>
+              <Box
+                sx={{
+                  p: 1,
+                  borderRadius: '12px',
+                  bgcolor: 'rgba(79,138,139,0.08)',
+                  border: '1px solid rgba(79,138,139,0.15)',
+                  display: { xs: 'none', sm: 'flex' }
+                }}
+              >
+                <TrendingUpIcon sx={{ fontSize: 24, color: '#4F8A8B' }} />
+              </Box>
               <Box>
-                <TrendingUpIcon sx={{ fontSize: { xs: 32, md: 44 }, color: '#fff', mb: 1 }} />
                 <Typography
-                  variant="h4"
+                  variant="h5"
                   sx={{
                     fontWeight: 800,
-                    color: '#fff',
-                    letterSpacing: '0.5px',
-                    fontSize: { xs: '1.6rem', md: '2.2rem' }
+                    color: '#0F172A',
+                    letterSpacing: '-0.5px',
+                    fontFamily: '"Sora", sans-serif',
+                    fontSize: { xs: '1.3rem', md: '1.8rem' }
                   }}
                 >
                   Create a Travelogue
                 </Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.88)', fontSize: { xs: '0.85rem', md: '1rem' } }}>
-                  Craft a cinematic travel story with photos, videos, and real tips.
+                <Typography sx={{ color: '#475569', fontSize: '0.86rem', mt: 0.2, fontWeight: 500 }}>
+                  Craft a beautiful step-by-step travel journal complete with photos, reels, and tips.
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={1} sx={{ mt: { md: 1.5 } }}>
-                <Chip label="4 min setup" sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#fff', fontWeight: 700 }} />
-                <Chip label="Verified stories" sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#fff', fontWeight: 700 }} />
-              </Stack>
             </Stack>
           </Box>
 
-          {/* Stepper Section */}
-          <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+          {/* Stepper Navigation */}
+          <Box sx={{ p: { xs: 2, sm: 2.2, md: 2.4 }, bgcolor: '#fff' }}>
             <Box
               sx={{
-                p: { xs: 2, md: 2.5 },
-                borderRadius: '16px',
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}`,
-                bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.06),
-                mb: 4
+                p: 1.5,
+                borderRadius: '14px',
+                border: '1px solid rgba(79, 138, 139, 0.15)',
+                bgcolor: 'rgba(79, 138, 139, 0.04)',
+                mb: 2
               }}
             >
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5}>
-                <Typography variant="subtitle2" fontWeight={700} color="#4F8A8B">
-                  Step {activeStep + 1} of {steps.length}
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="subtitle2" fontWeight={800} color="#4F8A8B">
+                  Step {activeStep + 1} of {steps.length} - {steps[activeStep]}
                 </Typography>
-                <Typography variant="caption" color="#64748B">
-                  Complete each step to publish
+                <Typography variant="caption" color="#64748B" fontWeight={700}>
+                  PROGRESS CHRONOLOGY
                 </Typography>
               </Stack>
-              <Stepper activeStep={activeStep}>
-              {steps.map((label) => (
-                <Step key={label}>
-                  <StepLabel
-                    sx={{
-                      '& .MuiStepLabel-label': {
-                        fontSize: { xs: '0.75rem', md: '0.9rem' },
-                        fontWeight: 600,
-                        color: theme.palette.text.secondary,
-                        '&.Mui-active': { color: theme.palette.primary.main, fontWeight: 700 },
-                        '&.Mui-completed': { color: '#10b981' }
-                      }
-                    }}
-                  >
-                    {label}
-                  </StepLabel>
-                </Step>
-              ))}
-            </Stepper>
+              <Stepper activeStep={activeStep} alternativeLabel>
+                {steps.map((label, index) => (
+                  <Step key={label}>
+                    <StepLabel
+                      sx={{
+                        '& .MuiStepLabel-label': {
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          color: '#64748B',
+                          '&.Mui-active': { color: '#4F8A8B' },
+                          '&.Mui-completed': { color: '#10b981' }
+                        },
+                        '& .MuiStepIcon-root': {
+                          color: '#e2e8f0',
+                          '&.Mui-active': { color: '#4F8A8B' },
+                          '&.Mui-completed': { color: '#10b981' }
+                        }
+                      }}
+                    >
+                      {label}
+                    </StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
             </Box>
 
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={8}>
-                {/* Step 1: Story */}
+            <AnimatePresence exitBeforeEnter>
+              <Grid container spacing={2.5}>
+                <Grid item xs={12} md={9}>
+                
+                {/* Step 1: Write Story */}
                 {activeStep === 0 && (
-                  <Box sx={sectionCardSx}>
-                    <Typography variant="h6" fontWeight={800} mb={3} sx={{ color: '#1a1a1a' }}>
+              <motion.div key={0} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
+                <Box sx={sectionCardSx}>
+                    <Typography variant="h6" fontWeight={800} mb={3} color="#0f172a" sx={{ fontFamily: '"Sora", sans-serif' }}>
                       Tell Us Your Story
                     </Typography>
-                    <Stack spacing={2.5}>
+                    <Stack spacing={3}>
                       <TextField
                         label="Journey Title"
                         name="title"
                         value={formData.title}
                         onChange={handleInputChange}
                         fullWidth
-                        placeholder="e.g., My 10 Days in Bali"
-                        size="medium"
+                        placeholder="e.g. Hiking through the peaks of Himalayas"
                         sx={inputSx}
                       />
                       <TextField
-                        label="Destination"
+                        label="Destination / Country"
                         name="destination"
                         value={formData.destination}
                         onChange={handleInputChange}
                         fullWidth
-                        placeholder="e.g., Bali, Indonesia"
-                        size="medium"
+                        placeholder="e.g. Manali, Himachal Pradesh, India"
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -353,150 +476,136 @@ export default function CreateTravelogue() {
                         sx={inputSx}
                       />
                       <TextField
-                        label="Your Experience"
+                        label="Travel Experience Description"
                         name="description"
                         value={formData.description}
                         onChange={handleInputChange}
                         fullWidth
                         multiline
-                        rows={6}
-                        placeholder="Describe your journey, what you did, what you learned, and your favorite moments..."
+                        rows={4}
+                        placeholder="Share your personal memories, routes taken, recommendations, local cuisines, and advice..."
                         sx={inputSx}
                       />
                       <Box>
-                        <Typography variant="subtitle1" fontWeight={700} mb={2} color="#1a1a1a">
-                          Rate Your Experience
+                        <Typography variant="subtitle2" fontWeight={800} mb={1.5} color="#475569">
+                          RATE YOUR TRIP EXPERIENCE
                         </Typography>
                         <Rating
                           value={formData.rating}
                           onChange={(e, newValue) => setFormData({ ...formData, rating: newValue })}
                           size="large"
+                          emptyIcon={<StarIcon style={{ opacity: 0.25 }} fontSize="inherit" />}
                           sx={{ '& .MuiRating-icon': { fontSize: '2.5rem' } }}
                         />
                       </Box>
                     </Stack>
                   </Box>
+                </motion.div>
                 )}
 
-                {/* Step 2: Media */}
+                {/* Step 2: Media Upload */}
                 {activeStep === 1 && (
-                  <Box sx={sectionCardSx}>
-                    <Typography variant="h6" fontWeight={800} mb={3} sx={{ color: '#1a1a1a' }}>
+              <motion.div key={1} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
+                <Box sx={sectionCardSx}>
+                    <Typography variant="h6" fontWeight={800} mb={3} color="#0f172a" sx={{ fontFamily: '"Sora", sans-serif' }}>
                       Add Photos & Videos
                     </Typography>
+                    
+                    {/* Drag-and-Drop Area */}
                     <Box
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current.click()}
                       sx={{
-                        borderRadius: '16px',
-                        border: '1.5px dashed rgba(79,138,139,0.5)',
-                        p: 3,
-                        mb: 3,
+                        border: isDragOver ? '2px dashed #4F8A8B' : '2px dashed rgba(148,163,184,0.4)',
+                        borderRadius: '20px',
+                        p: 5,
                         textAlign: 'center',
-                        bgcolor: 'rgba(79,138,139,0.05)'
+                        bgcolor: isDragOver ? 'rgba(79,138,139,0.04)' : 'rgba(148,163,184,0.02)',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        mb: 4,
+                        '&:hover': {
+                          borderColor: '#4F8A8B',
+                          bgcolor: 'rgba(79,138,139,0.02)'
+                        }
                       }}
                     >
-                      <Typography fontWeight={700} color="#0F172A" mb={1}>
-                        Drop files here or upload
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        multiple
+                        hidden
+                        ref={fileInputRef}
+                        onChange={handleMediaChange}
+                      />
+                      <CloudUploadIcon sx={{ color: isDragOver ? '#4F8A8B' : '#94A3B8', fontSize: 50, mb: 1.5 }} />
+                      <Typography fontWeight={800} color="#334155" sx={{ fontSize: '1rem' }} mb={0.5}>
+                        Drag & drop trip files here
                       </Typography>
-                      <Typography variant="body2" color="#64748B" mb={2}>
-                        Photos, reels, and short clips bring your story alive.
+                      <Typography variant="caption" color="#64748B" fontWeight={500}>
+                        Supports JPEG, PNG, MP4. Click to choose folder files.
                       </Typography>
-                      <Button
-                        variant="contained"
-                        component="label"
-                        startIcon={<PhotoCamera />}
-                        sx={{
-                          borderRadius: '12px',
-                          py: 1.4,
-                          px: 3,
-                          fontWeight: 700,
-                          background: 'linear-gradient(135deg, #4F8A8B 0%, #6BA8AC 100%)',
-                          boxShadow: '0 8px 24px rgba(79,138,139,0.25)',
-                          fontSize: '0.95rem',
-                          '&:hover': {
-                            boxShadow: '0 12px 36px rgba(79,138,139,0.35)',
-                            transform: 'translateY(-2px)'
-                          },
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                        }}
-                      >
-                        Select Photos & Videos
-                        <input
-                          type="file"
-                          accept="image/*,video/*"
-                          multiple
-                          hidden
-                          ref={fileInputRef}
-                          onChange={handleMediaChange}
-                        />
-                      </Button>
                     </Box>
 
+                    {/* Previews grid */}
                     {media.length > 0 && (
                       <Box>
-                        <Typography variant="body2" fontWeight={600} mb={2} color="#6B7280">
-                          {media.length} file(s) selected
+                        <Typography variant="subtitle2" fontWeight={800} mb={2.5} color="#475569" sx={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Selected Media ({media.length})
                         </Typography>
                         <Grid container spacing={2}>
                           {media.map((file, idx) => {
                             const isImage = file.type.startsWith('image/');
                             const url = URL.createObjectURL(file);
                             return (
-                              <Grid item xs={6} sm={4} md={3} key={idx}>
+                              <Grid item xs={6} sm={4} key={idx}>
                                 <Card
                                   elevation={0}
                                   sx={{
                                     position: 'relative',
-                                    borderRadius: '12px',
-                                    border: '2px solid rgba(79,138,139,0.1)',
+                                    borderRadius: '16px',
+                                    border: '1px solid rgba(148,163,184,0.15)',
                                     overflow: 'hidden',
-                                    '&:hover': {
-                                      boxShadow: '0 8px 24px rgba(79,138,139,0.15)'
-                                    }
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+                                    height: 140
                                   }}
                                 >
-                                  {isImage && (
+                                  {isImage ? (
                                     <Box
                                       component="img"
                                       src={url}
                                       alt={file.name}
-                                      sx={{
-                                        width: '100%',
-                                        height: 120,
-                                        objectFit: 'cover',
-                                        borderRadius: '10px'
-                                      }}
+                                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                     />
+                                  ) : (
+                                    <Box sx={{ position: 'relative', width: '100%', height: '100%', bgcolor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Typography variant="caption" sx={{ color: '#fff', fontWeight: 800 }}>REEL</Typography>
+                                    </Box>
                                   )}
-                                  {!isImage && (
-                                    <video src={url} style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8 }} />
-                                  )}
-                                  <Tooltip title="Remove">
-                                    <IconButton
-                                      size="small"
-                                      sx={{
-                                        position: 'absolute',
-                                        top: 4,
-                                        right: 4,
-                                        bgcolor: 'rgba(255,255,255,0.95)',
-                                        zIndex: 2,
-                                        '&:hover': { bgcolor: '#fff' }
-                                      }}
-                                      onClick={() => handleRemoveMedia(idx)}
-                                    >
-                                      <DeleteIcon fontSize="small" sx={{ color: '#ef4444' }} />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Typography
-                                    variant="caption"
-                                    display="block"
-                                    mt={1}
-                                    px={1}
-                                    noWrap
-                                    fontWeight={600}
-                                    color="#6B7280"
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleRemoveMedia(idx)}
+                                    sx={{
+                                      position: 'absolute',
+                                      top: 8,
+                                      right: 8,
+                                      bgcolor: 'rgba(239, 68, 68, 0.95)',
+                                      color: '#fff',
+                                      width: 22,
+                                      height: 22,
+                                      zIndex: 3,
+                                      '&:hover': { bgcolor: '#ef4444' }
+                                    }}
                                   >
-                                    {file.name}
-                                  </Typography>
+                                    <CloseIcon sx={{ fontSize: 13 }} />
+                                  </IconButton>
+                                  <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, p: 0.8, bgcolor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}>
+                                    <Typography variant="caption" color="#fff" noWrap display="block" sx={{ fontSize: '0.65rem' }}>
+                                      {file.name}
+                                    </Typography>
+                                  </Box>
                                 </Card>
                               </Grid>
                             );
@@ -505,276 +614,301 @@ export default function CreateTravelogue() {
                       </Box>
                     )}
                   </Box>
+                </motion.div>
                 )}
 
                 {/* Step 3: Trip Details */}
                 {activeStep === 2 && (
-                  <Box sx={sectionCardSx}>
-                    <Typography variant="h6" fontWeight={800} mb={3} sx={{ color: '#1a1a1a' }}>
-                      Trip Information
+              <motion.div key={2} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}>
+                <Box sx={sectionCardSx}>
+                    <Typography variant="h6" fontWeight={800} mb={3.5} color="#0f172a" sx={{ fontFamily: '"Sora", sans-serif' }}>
+                      Additional Trip Details
                     </Typography>
-                    <Stack spacing={2.5}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Start Date"
-                        type="date"
-                        name="startDate"
-                        value={formData.startDate}
-                        onChange={handleInputChange}
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        sx={inputSx}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="End Date"
-                        type="date"
-                        name="endDate"
-                        value={formData.endDate}
-                        onChange={handleInputChange}
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        sx={inputSx}
-                      />
-                    </Grid>
-                  </Grid>
+                    
+                    <Stack spacing={3.5}>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <Grid container spacing={3.5}>
+                          <Grid item xs={12} sm={6}>
+                            <DatePicker
+                              label="Start Date"
+                              value={formData.startDate ? dayjs(formData.startDate) : null}
+                              onChange={handleStartDateChange}
+                              disableFuture
+                              maxDate={todayDate}
+                              format="DD MMM YYYY"
+                              slotProps={{
+                                textField: {
+                                  fullWidth: true,
+                                  helperText: 'Only past dates or today',
+                                  sx: datePickerFieldSx
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <DatePicker
+                              label="End Date"
+                              value={formData.endDate ? dayjs(formData.endDate) : null}
+                              onChange={handleEndDateChange}
+                              disableFuture
+                              minDate={formData.startDate ? dayjs(formData.startDate) : undefined}
+                              maxDate={todayDate}
+                              format="DD MMM YYYY"
+                              slotProps={{
+                                textField: {
+                                  fullWidth: true,
+                                  helperText: 'Only past dates or today',
+                                  sx: datePickerFieldSx
+                                }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      </LocalizationProvider>
 
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                      <Grid container spacing={3.5}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            label="Duration (Auto Calculated)"
+                            value={computedDuration ? `${computedDuration} day(s)` : ''}
+                            placeholder="Select start and end date"
+                            fullWidth
+                            InputProps={{ readOnly: true }}
+                            sx={inputSx}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            label="Travelers Count"
+                            type="number"
+                            name="travelersCount"
+                            placeholder="e.g. 2"
+                            value={formData.travelersCount}
+                            onChange={handleInputChange}
+                            fullWidth
+                            inputProps={{ min: 1, step: 1 }}
+                            InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <GroupIcon sx={{ color: '#4F8A8B', fontSize: 18 }} />
+                                </InputAdornment>
+                              )
+                            }}
+                            helperText="Minimum 1 traveler"
+                            sx={inputSx}
+                          />
+                        </Grid>
+                      </Grid>
+
+                      <Grid container spacing={3.5}>
+                        <Grid item xs={12}>
+                          <TextField
+                            select
+                            label="Best Season"
+                            name="season"
+                            value={formData.season}
+                            onChange={handleInputChange}
+                            fullWidth
+                            SelectProps={{ native: true }}
+                            InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <WbSunnyIcon sx={{ color: '#4F8A8B', fontSize: 18 }} />
+                                </InputAdornment>
+                              )
+                            }}
+                            sx={inputSx}
+                          >
+                            <option value="">Choose Season</option>
+                            {seasons.map(s => <option key={s} value={s}>{s}</option>)}
+                          </TextField>
+                        </Grid>
+                      </Grid>
+
                       <TextField
-                        label="Duration (days)"
+                        label="Estimated Budget (INR / Local)"
                         type="number"
-                        name="duration"
-                        value={formData.duration}
+                        name="estimatedCost"
+                        placeholder="e.g. 25000"
+                        value={formData.estimatedCost}
                         onChange={handleInputChange}
                         fullWidth
-                        sx={inputSx}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Number of Travelers"
-                        type="number"
-                        name="travelersCount"
-                        value={formData.travelersCount}
-                        onChange={handleInputChange}
-                        fullWidth
-                        sx={inputSx}
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        select
-                        label="Difficulty Level"
-                        name="difficulty"
-                        value={formData.difficulty}
-                        onChange={handleInputChange}
-                        fullWidth
-                        SelectProps={{
-                          native: true
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <MonetizationOnIcon sx={{ color: '#4F8A8B', fontSize: 18 }} />
+                            </InputAdornment>
+                          )
                         }}
                         sx={inputSx}
-                      >
-                        {difficulties.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
-                      </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        select
-                        label="Best Season"
-                        name="season"
-                        value={formData.season}
-                        onChange={handleInputChange}
-                        fullWidth
-                        SelectProps={{
-                          native: true
-                        }}
-                        sx={inputSx}
-                      >
-                        <option value="">Select Season</option>
-                        {seasons.map(s => <option key={s} value={s}>{s}</option>)}
-                      </TextField>
-                    </Grid>
-                  </Grid>
-
-                  <TextField
-                    label="Estimated Cost (in your currency)"
-                    type="number"
-                    name="estimatedCost"
-                    value={formData.estimatedCost}
-                    onChange={handleInputChange}
-                    fullWidth
-                    sx={inputSx}
-                  />
-
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700} mb={2} color="#1a1a1a">
-                      Key Highlights
-                    </Typography>
-                    <Stack direction="row" spacing={1} mb={2}>
-                      <TextField
-                        size="small"
-                        value={highlightInput}
-                        onChange={(e) => setHighlightInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddHighlight(); } }}
-                        placeholder="e.g., Beautiful waterfalls, local cuisine"
-                        fullWidth
-                        sx={{
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: '10px'
-                          }
-                        }}
                       />
-                      <Button onClick={handleAddHighlight} variant="outlined" sx={{ borderRadius: '10px' }}>
-                        Add
-                      </Button>
-                    </Stack>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {formData.highlights.map((h) => (
-                        <Chip
-                          key={h}
-                          label={h}
-                          onDelete={() => handleDeleteHighlight(h)}
-                          sx={{
-                            borderRadius: '8px',
-                            fontWeight: 600,
-                            bgcolor: 'rgba(79,138,139,0.1)',
-                            color: '#4F8A8B',
-                            '& .MuiChip-deleteIcon': { color: '#4F8A8B' }
-                          }}
-                        />
-                      ))}
-                    </Stack>
-                  </Box>
 
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700} mb={2} color="#1a1a1a">
-                      Tags
-                    </Typography>
-                    <Stack direction="row" spacing={1} mb={2}>
-                      <TextField
-                        size="small"
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
-                        placeholder="Add tag (e.g., adventure, beach, budget)"
-                        fullWidth
-                        sx={{
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: '10px'
-                          }
-                        }}
-                      />
-                      <Button onClick={handleAddTag} variant="outlined" sx={{ borderRadius: '10px' }}>
-                        Add
-                      </Button>
+                      {/* Key highlights composer */}
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={800} mb={1.5} color="#475569">
+                          ADD HIGHLIGHT MOMENTS
+                        </Typography>
+                        <Stack direction="row" spacing={1.5} mb={2}>
+                          <TextField
+                            size="small"
+                            value={highlightInput}
+                            onChange={(e) => setHighlightInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddHighlight(); } }}
+                            placeholder="e.g. Scuba diving, Sunset dinner, Local tour guides"
+                            fullWidth
+                            sx={{
+                              '& .MuiOutlinedInput-root': { borderRadius: '12px' }
+                            }}
+                          />
+                          <Button 
+                            onClick={handleAddHighlight} 
+                            variant="outlined" 
+                            sx={{ borderRadius: '12px', borderColor: 'rgba(79, 138, 139, 0.4)', color: '#4F8A8B', px: 3, fontWeight: 700 }}
+                          >
+                            Add
+                          </Button>
+                        </Stack>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap gap={1}>
+                          {formData.highlights.map((h) => (
+                          <motion.div layout>
+                            <Chip
+                              key={h}
+                              label={h}
+                              onDelete={() => handleDeleteHighlight(h)}
+                              sx={{
+                                borderRadius: '10px',
+                                fontWeight: 700,
+                                bgcolor: 'rgba(79,138,139,0.06)',
+                                color: '#4F8A8B',
+                                border: '1px solid rgba(79,138,139,0.1)'
+                              }}
+                            />
+                          </motion.div>
+                          ))}
+                        </Stack>
+                      </Box>
+
+                      {/* Keywords Input */}
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={800} mb={1.5} color="#475569">
+                          KEYWORDS / TAGS
+                        </Typography>
+                        <Stack direction="row" spacing={1.5} mb={2} alignItems="center">
+                          <TextField
+                            size="small"
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+                            placeholder="e.g. adventure, solo-trip, budget-hotel"
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' }, width: '100%' }}
+                          />
+                          <Button 
+                            onClick={handleAddTag} 
+                            variant="outlined" 
+                            sx={{ borderRadius: '12px', borderColor: 'rgba(79, 138, 139, 0.4)', color: '#4F8A8B', px: 2, fontWeight: 700 }}
+                          >
+                            Add
+                          </Button>
+                        </Stack>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap gap={1}>
+                          {formData.tags.map((tag) => (
+                          <motion.div layout>
+                            <Chip
+                              key={tag}
+                              label={tag}
+                              onDelete={() => handleDeleteTag(tag)}
+                              sx={{
+                                borderRadius: '10px',
+                                fontWeight: 700,
+                                bgcolor: 'rgba(245, 158, 11, 0.06)',
+                                color: '#d97706',
+                                border: '1px solid rgba(245, 158, 11, 0.12)'
+                              }}
+                            />
+                          </motion.div>
+                          ))}
+                        </Stack>
+                      </Box>
                     </Stack>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {formData.tags.map((tag) => (
-                        <Chip
-                          key={tag}
-                          label={tag}
-                          onDelete={() => handleDeleteTag(tag)}
-                          sx={{
-                            borderRadius: '8px',
-                            fontWeight: 600,
-                            bgcolor: 'rgba(249,237,105,0.15)',
-                            color: '#B8860B',
-                            '& .MuiChip-deleteIcon': { color: '#B8860B' }
-                          }}
-                        />
-                      ))}
-                    </Stack>
-                  </Box>
-                    </Stack>
-                  </Box>
+                </Box>
+              </motion.div>
                 )}
 
-                {/* Step 4: Review */}
+                {/* Step 4: Review Details */}
                 {activeStep === 3 && (
                   <Box sx={sectionCardSx}>
-                    <Typography variant="h6" fontWeight={800} mb={3} sx={{ color: '#1a1a1a' }}>
-                      Review Your Travelogue
+                    <Typography variant="h6" fontWeight={800} mb={3.5} color="#0f172a" sx={{ fontFamily: '"Sora", sans-serif' }}>
+                      Review Summary
                     </Typography>
-                    <Card elevation={0} sx={{ p: 3, borderRadius: '12px', bgcolor: 'rgba(79,138,139,0.03)', border: '2px solid rgba(79,138,139,0.1)' }}>
-                      <Grid container spacing={3}>
-                    <Grid item xs={12}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Title
-                      </Typography>
-                      <Typography variant="h6" fontWeight={700} color="#1a1a1a">{formData.title || '—'}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Destination
-                      </Typography>
-                      <Typography variant="body1" color="#1a1a1a">{formData.destination || '—'}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Rating
-                      </Typography>
-                      <Rating value={formData.rating} readOnly size="small" />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Description
-                      </Typography>
-                      <Typography variant="body2" color="#1a1a1a" sx={{ maxHeight: 200, overflowY: 'auto' }}>
-                        {formData.description || '—'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Duration
-                      </Typography>
-                      <Typography variant="body1" color="#1a1a1a">{formData.duration || '—'} days</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Travelers
-                      </Typography>
-                      <Typography variant="body1" color="#1a1a1a">{formData.travelersCount || '—'} people</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Difficulty
-                      </Typography>
-                      <Typography variant="body1" color="#1a1a1a">{formData.difficulty}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography fontWeight={700} color="#6B7280" fontSize="0.85rem" textTransform="uppercase">
-                        Media Files
-                      </Typography>
-                      <Typography variant="body1" color="#1a1a1a">{media.length} file(s)</Typography>
-                    </Grid>
+                    
+                    <Paper 
+                      elevation={0} 
+                      sx={{ 
+                        p: 3, 
+                        borderRadius: '16px', 
+                        bgcolor: '#f8fafc', 
+                        border: '1px solid rgba(148,163,184,0.1)' 
+                      }}
+                    >
+                      <Grid container spacing={3.5}>
+                        <Grid item xs={12}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>TITLE</Typography>
+                          <Typography variant="h6" fontWeight={800} color="#0f172a">{formData.title || '—'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>DESTINATION</Typography>
+                          <Typography variant="body1" fontWeight={600} color="#1e293b">{formData.destination || '—'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>RATING SCORE</Typography>
+                          <Rating value={formData.rating} readOnly size="small" />
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>DESCRIPTION</Typography>
+                          <Typography variant="body2" color="#334155" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                            {formData.description || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>DURATION</Typography>
+                          <Typography variant="body1" fontWeight={700} color="#1e293b">{computedDuration || '—'} Day(s)</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>TRAVELERS COUNT</Typography>
+                          <Typography variant="body1" fontWeight={700} color="#1e293b">{formData.travelersCount} Person(s)</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>ESTIMATED COST</Typography>
+                          <Typography variant="body1" fontWeight={700} color="#1e293b">₹{formData.estimatedCost || '0'}</Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography fontWeight={700} color="#64748B" fontSize="0.75rem" sx={{ letterSpacing: '0.5px' }}>MEDIA ATTACHMENTS</Typography>
+                          <Typography variant="body1" fontWeight={700} color="#10b981">{media.length} files selected</Typography>
+                        </Grid>
                       </Grid>
-                    </Card>
+                    </Paper>
                   </Box>
                 )}
 
-                {/* Navigation Buttons */}
-                <Box sx={{ display: 'flex', gap: 2, mt: 4, justifyContent: 'space-between' }}>
+                {/* Stepper Buttons Row */}
+                <Box sx={{ display: 'flex', gap: 2, mt: 2.5, justifyContent: 'space-between' }}>
                   <Button
                     disabled={activeStep === 0}
                     onClick={handleBack}
                     variant="outlined"
+                    startIcon={<ArrowBackIcon />}
                     sx={{
                       borderRadius: '12px',
-                      py: 1.2,
+                      py: 1.3,
                       px: 3,
                       fontWeight: 700,
-                      borderColor: '#E5E7EB',
-                      color: '#6B7280',
+                      borderColor: 'rgba(148,163,184,0.3)',
+                      color: '#64748B',
+                      textTransform: 'none',
                       '&:hover': {
                         borderColor: '#4F8A8B',
                         color: '#4F8A8B',
-                        bgcolor: 'rgba(79,138,139,0.05)'
+                        bgcolor: 'rgba(79,138,139,0.03)'
                       }
                     }}
                   >
@@ -790,14 +924,15 @@ export default function CreateTravelogue() {
                         onClick={() => handleSubmit(true)}
                         sx={{
                           borderRadius: '12px',
-                          py: 1.2,
+                          py: 1.3,
                           px: 3,
                           fontWeight: 700,
-                          borderColor: '#F9ED69',
-                          color: '#B8860B',
+                          borderColor: 'rgba(79, 138, 139, 0.4)',
+                          color: '#4F8A8B',
+                          textTransform: 'none',
                           '&:hover': {
-                            borderColor: '#F9ED69',
-                            bgcolor: 'rgba(249,237,105,0.1)'
+                            borderColor: '#4F8A8B',
+                            bgcolor: 'rgba(79, 138, 139, 0.05)'
                           }
                         }}
                       >
@@ -810,22 +945,21 @@ export default function CreateTravelogue() {
                         disabled={!isStepValid()}
                         onClick={handleNext}
                         variant="contained"
+                        endIcon={<ArrowForwardIcon />}
                         sx={{
                           borderRadius: '12px',
-                          py: 1.2,
-                          px: 3,
+                          py: 1.3,
+                          px: 4,
                           fontWeight: 700,
+                          textTransform: 'none',
                           background: 'linear-gradient(135deg, #4F8A8B 0%, #6BA8AC 100%)',
                           boxShadow: '0 8px 24px rgba(79,138,139,0.25)',
                           '&:hover': {
-                            boxShadow: '0 12px 36px rgba(79,138,139,0.35)',
-                            transform: 'translateY(-2px)'
-                          },
-                          '&:disabled': { opacity: 0.5 },
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                            background: 'linear-gradient(135deg, #5ea1a2 0%, #7cbfc3 100%)',
+                          }
                         }}
                       >
-                        Next
+                        Next Step
                       </Button>
                     ) : (
                       <Button
@@ -835,16 +969,15 @@ export default function CreateTravelogue() {
                         onClick={() => handleSubmit(false)}
                         sx={{
                           borderRadius: '12px',
-                          py: 1.2,
-                          px: 3,
+                          py: 1.3,
+                          px: 4,
                           fontWeight: 700,
+                          textTransform: 'none',
                           background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                           boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)',
                           '&:hover': {
-                            boxShadow: '0 12px 36px rgba(16, 185, 129, 0.35)',
-                            transform: 'translateY(-2px)'
-                          },
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                          }
                         }}
                       >
                         {loading ? 'Publishing...' : 'Publish Travelogue'}
@@ -852,67 +985,72 @@ export default function CreateTravelogue() {
                     )}
                   </Box>
                 </Box>
+
               </Grid>
 
-              <Grid item xs={12} md={4}>
+              {/* Sidebar Help Card Checklist */}
+              <Grid item xs={12} md={3}>
                 <Card
                   elevation={0}
                   sx={{
-                    borderRadius: '16px',
+                    borderRadius: '24px',
                     border: '1px solid rgba(79,138,139,0.15)',
-                    bgcolor: 'rgba(79,138,139,0.04)',
-                    p: 2.5,
+                    bgcolor: 'rgba(79,138,139,0.03)',
+                    p: 3,
                     position: { md: 'sticky' },
-                    top: { md: 100 }
+                    top: 100
                   }}
                 >
-                  <Typography variant="subtitle1" fontWeight={800} color="#0F172A" mb={2}>
-                    Story Checklist
+                  <Typography variant="subtitle1" fontWeight={800} color="#0F172A" mb={2} sx={{ fontFamily: '"Sora", sans-serif' }}>
+                    Setup Advice
                   </Typography>
-                  <Stack spacing={1.5}>
-                    <Box sx={{ display: 'flex', gap: 1.2, alignItems: 'center' }}>
-                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#4F8A8B' }} />
-                      <Typography variant="body2" color="#475569">
-                        A strong title and clear destination
+                  <Stack spacing={2} mb={2.5}>
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F8A8B', mt: 0.8, flexShrink: 0 }} />
+                      <Typography variant="body2" color="#475569" sx={{ lineHeight: 1.4 }}>
+                        A solid, interesting title captures search interest.
                       </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1.2, alignItems: 'center' }}>
-                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#F9ED69' }} />
-                      <Typography variant="body2" color="#475569">
-                        6 to 10 standout photos or a short reel
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F8A8B', mt: 0.8, flexShrink: 0 }} />
+                      <Typography variant="body2" color="#475569" sx={{ lineHeight: 1.4 }}>
+                        Add up to 10 photos or short clips of locations.
                       </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1.2, alignItems: 'center' }}>
-                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#10B981' }} />
-                      <Typography variant="body2" color="#475569">
-                        Highlight key moments and tips for others
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F8A8B', mt: 0.8, flexShrink: 0 }} />
+                      <Typography variant="body2" color="#475569" sx={{ lineHeight: 1.4 }}>
+                        Provide cost estimates and days spent to guide other travelers.
                       </Typography>
                     </Box>
                   </Stack>
+                  
+                  <Divider sx={{ my: 2.5 }} />
 
-                  <Divider sx={{ my: 2 }} />
-
-                  <Typography variant="subtitle2" fontWeight={700} color="#0F172A" mb={1}>
-                    Visibility
+                  <Typography variant="subtitle2" fontWeight={800} color="#0F172A" mb={1} sx={{ fontFamily: '"Sora", sans-serif' }}>
+                    Review Policy
                   </Typography>
-                  <Typography variant="body2" color="#64748B">
-                    Travelogues are reviewed before they appear in the public feed to keep the community authentic.
+                  <Typography variant="body2" color="#64748B" sx={{ lineHeight: 1.5 }}>
+                    Submissions are moderated within 24 hours to guarantee genuine experiences and prevent spam.
                   </Typography>
                 </Card>
               </Grid>
-            </Grid>
-          </Box>
+              </Grid>
+            </AnimatePresence>
+
+            </Box>
         </Paper>
+
       </Box>
 
-      {/* Notifications */}
+      {/* Snackbar Notifications */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
         onClose={() => setError('')}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert severity="error" onClose={() => setError('')} sx={{ width: '100%' }}>
+        <Alert severity="error" onClose={() => setError('')} sx={{ width: '100%', borderRadius: '12px' }}>
           {error}
         </Alert>
       </Snackbar>
@@ -923,7 +1061,7 @@ export default function CreateTravelogue() {
         onClose={() => setSuccess(false)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert severity="success" onClose={() => setSuccess(false)} sx={{ width: '100%' }}>
+        <Alert severity="success" onClose={() => setSuccess(false)} sx={{ width: '100%', borderRadius: '12px' }}>
           Travelogue submitted successfully! 🎉
         </Alert>
       </Snackbar>

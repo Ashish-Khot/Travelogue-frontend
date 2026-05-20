@@ -17,34 +17,38 @@ const metricsConfig = [
   {
     title: 'Upcoming Trips',
     key: 'upcomingTrips',
-    icon: <EventAvailableIcon sx={{ color: '#0f766e', fontSize: 26 }} />,
-    color: '#f1f7f6',
-    subColor: '#0f766e',
-    glow: 'rgba(15, 118, 110, 0.18)',
+    icon: <EventAvailableIcon sx={{ color: '#0ea5e9', fontSize: 24 }} />,
+    color: '#f0f9ff',
+    subColor: '#0ea5e9',
+    glow: 'rgba(14, 165, 233, 0.15)',
+    borderActive: 'rgba(14, 165, 233, 0.4)',
   },
   {
     title: 'Countries Visited',
     key: 'countriesVisited',
-    icon: <PublicIcon sx={{ color: '#b45309', fontSize: 26 }} />,
-    color: '#fef7ed',
-    subColor: '#b45309',
-    glow: 'rgba(180, 83, 9, 0.18)',
+    icon: <PublicIcon sx={{ color: '#10b981', fontSize: 24 }} />,
+    color: '#ecfdf5',
+    subColor: '#10b981',
+    glow: 'rgba(16, 185, 129, 0.15)',
+    borderActive: 'rgba(16, 185, 129, 0.4)',
   },
   {
     title: 'Saved Destinations',
     key: 'savedDestinations',
-    icon: <BookmarkIcon sx={{ color: '#1d4ed8', fontSize: 26 }} />,
-    color: '#eff6ff',
-    subColor: '#1d4ed8',
-    glow: 'rgba(29, 78, 216, 0.16)',
+    icon: <BookmarkIcon sx={{ color: '#f59e0b', fontSize: 24 }} />,
+    color: '#fffbeb',
+    subColor: '#f59e0b',
+    glow: 'rgba(245, 158, 11, 0.15)',
+    borderActive: 'rgba(245, 158, 11, 0.4)',
   },
   {
     title: 'Reward Points',
     key: 'rewardPoints',
-    icon: <EmojiEventsIcon sx={{ color: '#be185d', fontSize: 26 }} />,
+    icon: <EmojiEventsIcon sx={{ color: '#ec4899', fontSize: 24 }} />,
     color: '#fdf2f8',
-    subColor: '#be185d',
-    glow: 'rgba(190, 24, 93, 0.16)',
+    subColor: '#ec4899',
+    glow: 'rgba(236, 72, 153, 0.15)',
+    borderActive: 'rgba(236, 72, 153, 0.4)',
   },
 ];
 
@@ -60,7 +64,6 @@ const extractCountryFromDestination = (destination = '') => {
     .map((part) => part.trim())
     .filter(Boolean);
 
-  // A single-token destination like "Goa" is usually a city/state, not a country.
   if (parts.length < 2) return '';
 
   const candidate = parts[parts.length - 1];
@@ -112,7 +115,6 @@ export default function DashboardMetrics() {
           : [];
       const userData = userRes.data?.[0] || userRes.data || {};
 
-      // Count upcoming trips (confirmed bookings with future dates)
       const now = new Date();
       const upcomingBookings = bookings.filter((b) =>
         b.status === 'confirmed' && new Date(b.startDateTime) > now
@@ -123,7 +125,6 @@ export default function DashboardMetrics() {
                bookingDate.getFullYear() === now.getFullYear();
       });
 
-      // Get unique countries from completed tours using reliable country sources.
       const completedBookings = bookings.filter((b) => b.status === 'completed');
       const visitedCountryKeys = new Set();
       completedBookings.forEach((booking) => {
@@ -133,7 +134,6 @@ export default function DashboardMetrics() {
       });
       const countriesVisited = visitedCountryKeys.size;
 
-      // Get saved destinations (from user profile or from a favorites endpoint)
       const savedDests = Array.isArray(userData.savedDestinations)
         ? userData.savedDestinations
         : Array.isArray(userData.favorites)
@@ -146,28 +146,25 @@ export default function DashboardMetrics() {
                savedDate.getFullYear() === now.getFullYear();
       }).length;
 
-      // Get reward points
       const rewardPoints = Number(userData.rewardPoints || 0);
 
       setMetrics({
         upcomingTrips: upcomingBookings.length,
-        upcomingSubtext: `+${thisMonthBookings.length} this month`,
+        upcomingSubtext: `+${thisMonthBookings.length} new`,
         countriesVisited,
         countriesSubtext:
           completedBookings.length === 0
-            ? 'first trip'
+            ? '0 visited'
             : countriesVisited > 0
-              ? `${countriesVisited} unique countries`
-              : 'location data incomplete',
+              ? `${countriesVisited} countries`
+              : 'location details incomplete',
         savedDestinations: savedDests.length,
         savedSubtext: `${newSavedThisMonth} new`,
         rewardPoints: rewardPoints.toLocaleString(),
-        rewardSubtext: `+${Math.max(0, (rewardPoints - Math.floor(rewardPoints / 500) * 500))} earned`,
+        rewardSubtext: `Active`,
       });
     } catch (err) {
       console.error('Error fetching metrics:', err);
-      // Fallback to default values
-      setMetrics((m) => m);
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -199,70 +196,76 @@ export default function DashboardMetrics() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+        <CircularProgress sx={{ color: '#4F8A8B' }} />
       </Box>
     );
   }
 
   return (
-    <Grid container spacing={3} sx={{ mb: 3 }}>
+    <Grid container spacing={3} sx={{ mb: 4 }}>
       {metricsConfig.map((config, idx) => (
         <Grid item xs={12} sm={6} md={3} key={config.key}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: idx * 0.1 }}
+            transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 100 }}
           >
             <Paper
               elevation={0}
               sx={{
-                borderRadius: '20px',
-                bgcolor: '#ffffff',
-                border: '1px solid rgba(148, 163, 184, 0.18)',
-                p: 2.5,
+                borderRadius: '24px',
+                bgcolor: (theme) => 
+                  theme.palette.mode === 'dark' 
+                    ? 'rgba(30, 41, 59, 0.5)' 
+                    : '#ffffff',
+                border: '1px solid rgba(148, 163, 184, 0.15)',
+                p: 3,
                 position: 'relative',
                 overflow: 'hidden',
-                boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)',
-                transition: 'all 0.3s ease',
+                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.05)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                backdropFilter: 'blur(10px)',
                 '&:before': {
                   content: '""',
                   position: 'absolute',
-                  top: -30,
-                  right: -30,
-                  width: 140,
-                  height: 140,
+                  top: -24,
+                  right: -24,
+                  width: 100,
+                  height: 100,
                   background: config.color,
                   borderRadius: '50%',
-                  opacity: 0.8,
-                },
-                '&:after': {
-                  content: '""',
-                  position: 'absolute',
-                  inset: 0,
-                  background: `linear-gradient(135deg, ${config.glow} 0%, transparent 55%)`,
-                  opacity: 0,
-                  transition: 'opacity 0.3s ease',
+                  opacity: 0.3,
+                  transition: 'all 0.3s ease',
                 },
                 '&:hover': {
                   transform: 'translateY(-6px)',
-                  boxShadow: '0 24px 45px rgba(15, 23, 42, 0.12)',
-                  '&:after': { opacity: 1 },
+                  borderColor: config.borderActive,
+                  boxShadow: `0 20px 40px ${config.glow}`,
+                  '&:before': {
+                    transform: 'scale(1.2)',
+                  },
+                  '& .metric-icon-box': {
+                    transform: 'scale(1.1) rotate(5deg)',
+                    boxShadow: `0 8px 20px ${config.glow}`
+                  }
                 }
               }}
             >
               <Box sx={{ position: 'relative', zIndex: 1 }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={2.5}>
                   <Box
+                    className="metric-icon-box"
                     sx={{
-                      width: 46,
-                      height: 46,
-                      borderRadius: '14px',
+                      width: 44,
+                      height: 44,
+                      borderRadius: '12px',
                       bgcolor: config.color,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       border: `1px solid ${config.subColor}20`,
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}
                   >
                     {config.icon}
@@ -270,26 +273,47 @@ export default function DashboardMetrics() {
                   <Typography
                     variant="caption"
                     sx={{
-                      color: '#475569',
-                      fontWeight: 600,
-                      bgcolor: 'rgba(148, 163, 184, 0.12)',
-                      px: 1.2,
-                      py: 0.4,
-                      borderRadius: '999px',
+                      color: config.subColor,
+                      fontWeight: 700,
+                      bgcolor: config.color,
+                      border: `1px solid ${config.subColor}15`,
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: '30px',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.2px'
                     }}
                   >
                     {metrics[`${config.key}Subtext`]}
                   </Typography>
                 </Box>
-                <Typography variant="subtitle2" sx={{ color: '#64748b', fontWeight: 600, mb: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
                   {config.title}
                 </Typography>
-                <Typography variant="h4" fontWeight={800} sx={{ color: '#0f172a' }}>
+                <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary', fontFamily: '"Sora", sans-serif', mb: 1.5 }}>
                   {metrics[config.key]}
                 </Typography>
-                <Typography variant="body2" sx={{ color: config.subColor, fontWeight: 600, mt: 0.5 }}>
-                  Updated in real time
-                </Typography>
+                
+                {/* Pulsing Sync Dot */}
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Box 
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      bgcolor: '#10b981',
+                      animation: 'pulse 2s infinite',
+                      '@keyframes pulse': {
+                        '0%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(16, 185, 129, 0.7)' },
+                        '70%': { transform: 'scale(1)', boxShadow: '0 0 0 6px rgba(16, 185, 129, 0)' },
+                        '100%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(16, 185, 129, 0)' },
+                      }
+                    }}
+                  />
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.7rem' }}>
+                    Live synced
+                  </Typography>
+                </Box>
               </Box>
             </Paper>
           </motion.div>

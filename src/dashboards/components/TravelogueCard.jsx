@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Card, Box, CardContent, CardActions, Typography, IconButton, Chip, Stack, Avatar, Tooltip, Menu, MenuItem
+  Card, Box, CardContent, CardActions, Typography, IconButton, Chip, Stack, Avatar, Tooltip, Menu, MenuItem, Divider
 } from '@mui/material';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -11,7 +11,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -68,7 +68,7 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
   const handleShare = (platform) => {
     setAnchorEl(null);
     const text = `Check out "${travelogue.title}" - ${travelogue.destination}!`;
-    const url = window.location.origin; // You can add a specific travelogue URL here
+    const url = window.location.origin;
     
     if (platform === 'whatsapp') {
       window.open(`https://wa.me/?text=${encodeURIComponent(text)} ${url}`);
@@ -97,27 +97,32 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
 
   return (
     <motion.div
-      whileHover={{ y: -8, boxShadow: '0 20px 60px rgba(79,138,139,0.2)' }}
-      transition={{ type: 'spring', stiffness: 300 }}
+      whileHover={{ y: -8 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
       onClick={() => onViewDetails?.(travelogue._id)}
-      style={{ cursor: 'pointer' }}
+      style={{ height: '100%' }}
     >
       <Card
         elevation={0}
         sx={{
-          borderRadius: '16px',
+          borderRadius: '24px',
           overflow: 'hidden',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          border: '1px solid rgba(79,138,139,0.1)',
-          boxShadow: '0 8px 24px rgba(79,138,139,0.1)',
+          border: '1px solid rgba(148, 163, 184, 0.15)',
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          bgcolor: '#ffffff'
+          bgcolor: '#ffffff',
+          cursor: 'pointer',
+          '&:hover': {
+            boxShadow: '0 20px 40px rgba(15, 23, 42, 0.08)',
+            '& .card-media-img': { transform: 'scale(1.04)' }
+          }
         }}
       >
-        {/* Image Section with Carousel */}
-        <Box sx={{ position: 'relative', paddingBottom: '66.67%', overflow: 'hidden', bgcolor: '#f0f0f0' }}>
+        {/* Media Container with 3:2 aspect ratio */}
+        <Box sx={{ position: 'relative', pt: '64%', overflow: 'hidden', bgcolor: '#f1f5f9' }}>
           {mediaIsVideo ? (
             <Box
               component="video"
@@ -140,6 +145,7 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
               component="img"
               src={mediaUrl}
               alt={travelogue.title}
+              className="card-media-img"
               sx={{
                 position: 'absolute',
                 top: 0,
@@ -147,7 +153,7 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                transition: 'transform 0.3s ease'
+                transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
               onError={(e) => {
                 e.target.src = '/no-image.png';
@@ -155,7 +161,7 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
             />
           )}
 
-          {/* Image Navigation */}
+          {/* Left/Right Carousel Controls */}
           {travelogue.images && travelogue.images.length > 1 && (
             <>
               <IconButton
@@ -163,60 +169,68 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
                 onClick={handlePrevImage}
                 sx={{
                   position: 'absolute',
-                  left: 8,
+                  left: 10,
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  bgcolor: 'rgba(255,255,255,0.9)',
-                  color: '#4F8A8B',
+                  bgcolor: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(4px)',
+                  color: '#1e293b',
                   zIndex: 2,
-                  '&:hover': { bgcolor: '#fff' }
+                  width: 28,
+                  height: 28,
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                  '&:hover': { bgcolor: '#ffffff' }
                 }}
               >
-                <ChevronLeftIcon />
+                <ChevronLeftIcon sx={{ fontSize: 18 }} />
               </IconButton>
               <IconButton
                 size="small"
                 onClick={handleNextImage}
                 sx={{
                   position: 'absolute',
-                  right: 8,
+                  right: 10,
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  bgcolor: 'rgba(255,255,255,0.9)',
-                  color: '#4F8A8B',
+                  bgcolor: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(4px)',
+                  color: '#1e293b',
                   zIndex: 2,
-                  '&:hover': { bgcolor: '#fff' }
+                  width: 28,
+                  height: 28,
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                  '&:hover': { bgcolor: '#ffffff' }
                 }}
               >
-                <ChevronRightIcon />
+                <ChevronRightIcon sx={{ fontSize: 18 }} />
               </IconButton>
 
-              {/* Image Dots */}
+              {/* Slider dots indicators */}
               <Stack
                 direction="row"
-                spacing={0.5}
+                spacing={0.6}
                 sx={{
                   position: 'absolute',
-                  bottom: 8,
+                  bottom: 12,
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  zIndex: 2
+                  zIndex: 2,
+                  bgcolor: 'rgba(0, 0, 0, 0.3)',
+                  backdropFilter: 'blur(4px)',
+                  px: 1.2,
+                  py: 0.6,
+                  borderRadius: '10px'
                 }}
               >
                 {travelogue.images.map((_, idx) => (
                   <Box
                     key={idx}
                     sx={{
-                      width: 6,
-                      height: 6,
+                      width: 5,
+                      height: 5,
                       borderRadius: '50%',
-                      backgroundColor: idx === imageIndex ? '#fff' : 'rgba(255,255,255,0.5)',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageIndex(idx);
+                      backgroundColor: idx === imageIndex ? '#ffffff' : 'rgba(255, 255, 255, 0.4)',
+                      transition: 'all 0.2s ease'
                     }}
                   />
                 ))}
@@ -229,72 +243,78 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
             <Box
               sx={{
                 position: 'absolute',
-                top: 12,
-                right: 12,
-                bgcolor: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(4px)',
-                borderRadius: '20px',
+                top: 14,
+                right: 14,
+                bgcolor: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(6px)',
+                borderRadius: '12px',
                 px: 1.2,
-                py: 0.6,
+                py: 0.5,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0.5,
-                zIndex: 2
+                gap: 0.4,
+                zIndex: 2,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                border: '1px solid rgba(255,255,255,0.5)'
               }}
             >
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#4F8A8B' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>
                 {travelogue.rating.toFixed(1)}
               </span>
-              <span style={{ color: '#F9ED69', fontSize: '0.9rem' }}>★</span>
+              <span style={{ color: '#fbbf24', fontSize: '0.85rem' }}>★</span>
             </Box>
           )}
 
+          {/* Video Play Overlay Icon */}
           {mediaIsVideo && (
             <Box
               sx={{
                 position: 'absolute',
-                top: 12,
-                left: 12,
-                bgcolor: 'rgba(15, 23, 42, 0.8)',
+                top: 14,
+                left: 14,
+                bgcolor: 'rgba(15, 23, 42, 0.75)',
+                backdropFilter: 'blur(4px)',
                 color: '#fff',
-                borderRadius: '14px',
+                borderRadius: '10px',
                 px: 1,
                 py: 0.4,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 0.4,
-                zIndex: 2
+                zIndex: 2,
+                border: '1px solid rgba(255,255,255,0.1)'
               }}
             >
-              <PlayArrowIcon sx={{ fontSize: 14 }} />
-              <Typography variant="caption" fontWeight={700}>
-                Video
+              <PlayArrowIcon sx={{ fontSize: 13 }} />
+              <Typography variant="caption" fontWeight={700} sx={{ fontSize: '0.65rem', letterSpacing: '0.2px' }}>
+                REEL
               </Typography>
             </Box>
           )}
 
-          {/* Status Chip */}
+          {/* Status Overlay */}
           {travelogue.status !== 'approved' && (
             <Chip
               label={travelogue.status.toUpperCase()}
               size="small"
               sx={{
                 position: 'absolute',
-                bottom: 12,
-                left: 12,
+                bottom: 14,
+                left: 14,
                 zIndex: 2,
-                bgcolor: travelogue.status === 'pending' ? 'rgba(251, 191, 36, 0.9)' : 'rgba(239, 68, 68, 0.9)',
+                bgcolor: travelogue.status === 'pending' ? '#eab308' : '#ef4444',
                 color: '#fff',
-                fontWeight: 700,
-                fontSize: '0.7rem'
+                fontWeight: 800,
+                fontSize: '0.65rem',
+                height: 20
               }}
             />
           )}
         </Box>
 
-        {/* Content Section */}
-        <CardContent sx={{ flexGrow: 1, pb: 1 }}>
-          {/* Author Info */}
+        {/* Content Details */}
+        <CardContent sx={{ flexGrow: 1, p: 2.5, pb: 1 }}>
+          {/* Author metadata panel */}
           <Stack direction="row" spacing={1.5} alignItems="center" mb={2}>
             <Avatar
               src={
@@ -302,83 +322,89 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
                   ? buildImageUrl(travelogue.userId.avatar)
                   : '/default-avatar.png'
               }
-              sx={{ width: 32, height: 32 }}
+              sx={{ width: 34, height: 34, border: '1px solid rgba(148,163,184,0.2)' }}
             />
-            <Box flex={1}>
+            <Box sx={{ flexGrow: 1 }}>
               <Typography
                 variant="body2"
-                fontWeight={600}
-                color="#1a1a1a"
+                fontWeight={700}
+                color="#1e293b"
                 noWrap
+                sx={{ fontSize: '0.85rem' }}
               >
-                {travelogue.userId?.name || 'Anonymous'}
+                {travelogue.userId?.name || 'Anonymous Explorer'}
               </Typography>
-              <Typography variant="caption" color="#6B7280">
+              <Typography variant="caption" color="#64748B" sx={{ fontSize: '0.7rem' }}>
                 {formatDate(travelogue.createdAt)}
               </Typography>
             </Box>
             <IconButton
               size="small"
               onClick={handleMenuClick}
-              sx={{ color: '#6B7280' }}
+              sx={{ color: '#64748B' }}
             >
               <MoreVertIcon fontSize="small" />
             </IconButton>
           </Stack>
 
-          {/* Title */}
+          {/* Travelogue Title */}
           <Typography
-            variant="h6"
-            fontWeight={700}
-            color="#1a1a1a"
+            variant="subtitle1"
+            fontWeight={800}
+            color="#0f172a"
             mb={1}
             sx={{
+              fontFamily: '"Sora", sans-serif',
+              lineHeight: 1.3,
+              fontSize: '1.05rem',
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              letterSpacing: '-0.2px'
             }}
           >
             {travelogue.title}
           </Typography>
 
-          {/* Location & Duration */}
-          <Stack direction="row" spacing={2} mb={2} flexWrap="wrap">
+          {/* Location details */}
+          <Stack direction="row" spacing={2} mb={2} flexWrap="wrap" gap={1}>
             {travelogue.location && (
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <LocationOnIcon sx={{ fontSize: 16, color: '#4F8A8B' }} />
-                <Typography variant="caption" color="#6B7280" fontWeight={600}>
+                <LocationOnIcon sx={{ fontSize: 15, color: '#4F8A8B' }} />
+                <Typography variant="caption" color="#64748B" fontWeight={700} sx={{ fontSize: '0.75rem' }}>
                   {travelogue.location}
                 </Typography>
               </Stack>
             )}
             {travelogue.duration && (
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <CalendarTodayIcon sx={{ fontSize: 16, color: '#4F8A8B' }} />
-                <Typography variant="caption" color="#6B7280" fontWeight={600}>
+                <CalendarTodayIcon sx={{ fontSize: 14, color: '#4F8A8B' }} />
+                <Typography variant="caption" color="#64748B" fontWeight={700} sx={{ fontSize: '0.75rem' }}>
                   {travelogue.duration} days
                 </Typography>
               </Stack>
             )}
           </Stack>
 
-          {/* Description */}
+          {/* Intro Description */}
           <Typography
             variant="body2"
-            color="#6B7280"
+            color="#64748B"
             sx={{
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              mb: 2,
-              lineHeight: 1.5
+              mb: 2.5,
+              lineHeight: 1.5,
+              fontSize: '0.85rem'
             }}
           >
             {travelogue.description}
           </Typography>
 
-          {/* Tags */}
+          {/* Tags list */}
           {travelogue.tags && travelogue.tags.length > 0 && (
             <Stack direction="row" spacing={0.8} flexWrap="wrap" gap={0.8}>
               {travelogue.tags.slice(0, 3).map((tag) => (
@@ -387,11 +413,12 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
                   label={tag}
                   size="small"
                   sx={{
-                    fontSize: '0.75rem',
-                    height: 24,
-                    fontWeight: 600,
-                    bgcolor: 'rgba(79,138,139,0.08)',
-                    color: '#4F8A8B'
+                    fontSize: '0.7rem',
+                    height: 22,
+                    fontWeight: 700,
+                    bgcolor: 'rgba(79,138,139,0.06)',
+                    color: '#4F8A8B',
+                    border: '1px solid rgba(79,138,139,0.1)'
                   }}
                 />
               ))}
@@ -399,106 +426,103 @@ export default function TravelogueCard({ travelogue, onViewDetails, onRefresh })
           )}
         </CardContent>
 
-        {/* Stats Section */}
-        <Box sx={{ px: 2, py: 1.5, bgcolor: 'rgba(79,138,139,0.02)', borderTop: '1px solid rgba(79,138,139,0.1)' }}>
-          <Stack direction="row" spacing={2} justifyContent="space-around" alignItems="center">
-            <Stack alignItems="center">
-              <TrendingUpIcon sx={{ fontSize: 18, color: '#4F8A8B' }} />
-              <Typography variant="caption" fontWeight={700} color="#6B7280" fontSize="0.75rem">
-                {travelogue.views || 0} views
-              </Typography>
+        <Box sx={{ mt: 'auto' }}>
+          {/* Quick Metrics Bar */}
+          <Box sx={{ px: 2.5, py: 1.5, bgcolor: '#f8fafc', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
+            <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <VisibilityIcon sx={{ fontSize: 14, color: '#64748B' }} />
+                <Typography variant="caption" fontWeight={600} color="#64748B" sx={{ fontSize: '0.72rem' }}>
+                  {travelogue.views || 0} views
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={1.5}>
+                <Typography variant="caption" fontWeight={700} color="#64748B" sx={{ fontSize: '0.72rem' }}>
+                  {likeCount} likes
+                </Typography>
+                <Typography variant="caption" fontWeight={700} color="#64748B" sx={{ fontSize: '0.72rem' }}>
+                  {travelogue.comments?.length || 0} comments
+                </Typography>
+              </Stack>
             </Stack>
-            <Stack alignItems="center">
-              <FavoriteIcon sx={{ fontSize: 18, color: '#ef4444' }} />
-              <Typography variant="caption" fontWeight={700} color="#6B7280" fontSize="0.75rem">
-                {likeCount} likes
-              </Typography>
+          </Box>
+
+          {/* Action Callouts */}
+          <CardActions sx={{ p: 1.5, px: 2, justifyContent: 'space-between', borderTop: '1px solid rgba(148,163,184,0.08)' }}>
+            <Stack direction="row" spacing={0.5}>
+              <Tooltip title={liked ? 'Unlike' : 'Like'}>
+                <IconButton
+                  size="small"
+                  onClick={handleLike}
+                  sx={{
+                    color: liked ? '#ef4444' : '#64748B',
+                    '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.08)' }
+                  }}
+                >
+                  {liked ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Comment">
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewDetails?.(travelogue._id);
+                  }}
+                  sx={{
+                    color: '#4F8A8B',
+                    '&:hover': { bgcolor: 'rgba(79, 138, 139, 0.08)' }
+                  }}
+                >
+                  <ChatBubbleOutlineIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={saved ? 'Unsave' : 'Save'}>
+                <IconButton
+                  size="small"
+                  onClick={handleSave}
+                  sx={{
+                    color: saved ? '#eab308' : '#64748B',
+                    '&:hover': { bgcolor: 'rgba(234, 179, 8, 0.08)' }
+                  }}
+                >
+                  {saved ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
             </Stack>
-            <Stack alignItems="center">
-              <ChatBubbleOutlineIcon sx={{ fontSize: 18, color: '#4F8A8B' }} />
-              <Typography variant="caption" fontWeight={700} color="#6B7280" fontSize="0.75rem">
-                {travelogue.comments?.length || 0} comments
-              </Typography>
-            </Stack>
-            <Stack alignItems="center">
-              <BookmarkIcon sx={{ fontSize: 18, color: '#F9ED69' }} />
-              <Typography variant="caption" fontWeight={700} color="#6B7280" fontSize="0.75rem">
-                {saveCount} saved
-              </Typography>
-            </Stack>
-          </Stack>
+            <Tooltip title="Share story">
+              <IconButton
+                size="small"
+                onClick={handleMenuClick}
+                sx={{
+                  color: '#64748B',
+                  '&:hover': { bgcolor: 'rgba(148,163,184,0.08)' }
+                }}
+              >
+                <ShareIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </CardActions>
         </Box>
 
-        {/* Actions Section */}
-        <CardActions sx={{ p: 1.5, justifyContent: 'space-between' }}>
-          <Stack direction="row" spacing={0.5}>
-            <Tooltip title={liked ? 'Unlike' : 'Like'}>
-              <IconButton
-                size="small"
-                onClick={handleLike}
-                sx={{
-                  color: liked ? '#ef4444' : '#6B7280',
-                  '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' }
-                }}
-              >
-                {liked ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Comment">
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewDetails?.(travelogue._id);
-                }}
-                sx={{
-                  color: '#4F8A8B',
-                  '&:hover': { bgcolor: 'rgba(79, 138, 139, 0.1)' }
-                }}
-              >
-                <ChatBubbleOutlineIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={saved ? 'Unsave' : 'Save'}>
-              <IconButton
-                size="small"
-                onClick={handleSave}
-                sx={{
-                  color: saved ? '#F9ED69' : '#6B7280',
-                  '&:hover': { bgcolor: 'rgba(249, 237, 105, 0.1)' }
-                }}
-              >
-                {saved ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          </Stack>
-          <Tooltip title="Share">
-            <IconButton
-              size="small"
-              onClick={handleMenuClick}
-              sx={{
-                color: '#6B7280',
-                '&:hover': { bgcolor: 'rgba(79, 138, 139, 0.1)' }
-              }}
-            >
-              <ShareIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </CardActions>
-
-        {/* Menu */}
+        {/* Menu sharing panel */}
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={() => setAnchorEl(null)}
           PaperProps={{
-            sx: { borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }
+            sx: { 
+              borderRadius: '12px', 
+              boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+              border: '1px solid rgba(148,163,184,0.1)'
+            }
           }}
         >
-          <MenuItem onClick={() => handleShare('whatsapp')}>Share on WhatsApp</MenuItem>
-          <MenuItem onClick={() => handleShare('facebook')}>Share on Facebook</MenuItem>
-          <MenuItem onClick={() => handleShare('twitter')}>Share on Twitter</MenuItem>
-          <MenuItem onClick={() => handleShare('copy')}>Copy Link</MenuItem>
+          <MenuItem onClick={() => handleShare('whatsapp')} sx={{ fontSize: '0.85rem', fontWeight: 600 }}>Share on WhatsApp</MenuItem>
+          <MenuItem onClick={() => handleShare('facebook')} sx={{ fontSize: '0.85rem', fontWeight: 600 }}>Share on Facebook</MenuItem>
+          <MenuItem onClick={() => handleShare('twitter')} sx={{ fontSize: '0.85rem', fontWeight: 600 }}>Share on Twitter</MenuItem>
+          <Divider sx={{ my: 0.5 }} />
+          <MenuItem onClick={() => handleShare('copy')} sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#4F8A8B' }}>Copy Link</MenuItem>
         </Menu>
       </Card>
     </motion.div>

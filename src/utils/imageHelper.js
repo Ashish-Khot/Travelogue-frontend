@@ -10,6 +10,10 @@ export const buildImageUrl = (imagePath) => {
     return '/no-image.png';
   }
 
+  if (typeof imagePath !== 'string') {
+    return '/no-image.png';
+  }
+
   // If already a full URL, return as-is
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
     return imagePath;
@@ -24,6 +28,7 @@ export const buildImageUrl = (imagePath) => {
  * @returns {boolean}
  */
 export const isVideoFile = (mediaPath = '') => {
+  if (typeof mediaPath !== 'string') return false;
   const cleanPath = mediaPath.split('?')[0].toLowerCase();
   return [
     '.mp4',

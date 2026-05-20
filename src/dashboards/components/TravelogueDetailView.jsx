@@ -16,7 +16,8 @@ import SendIcon from '@mui/icons-material/Send';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { motion } from 'framer-motion';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
 import { buildImageUrl, isVideoFile } from '../../utils/imageHelper';
 
@@ -28,12 +29,10 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
   const [imageIndex, setImageIndex] = useState(0);
   const [commentText, setCommentText] = useState('');
   const [commentingLoading, setCommentingLoading] = useState(false);
-  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [error, setError] = useState('');
   const userId = JSON.parse(localStorage.getItem('user') || '{}')._id;
 
   useEffect(() => {
-    // Only fetch if we have an ID and no initial travelogue data
     if (travelogueId && !initialTravelogue) {
       fetchTravelogue();
     }
@@ -46,12 +45,8 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
       const response = await api.get(`/travelogue/${travelogueId}`);
       setTravelogue(response.data);
     } catch (err) {
-      console.error('Error fetching travelogue:', {
-        status: err.response?.status,
-        data: err.response?.data,
-        message: err.message
-      });
-      setError('Failed to load travelogue: ' + (err.response?.data?.message || err.message));
+      console.error('Error fetching travelogue:', err);
+      setError('Failed to load travelogue details.');
     } finally {
       setLoading(false);
     }
@@ -80,6 +75,12 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
       if (!id) return;
       const response = await api.post(`/travelogue/${id}/save`);
       setSaved(response.data.saved);
+      setTravelogue(prev => ({
+        ...prev,
+        saves: response.data.saved
+          ? [...(prev.saves || []), { userId }]
+          : (prev.saves || []).filter(s => s.userId !== userId)
+      }));
     } catch (err) {
       console.error('Error saving:', err);
     }
@@ -105,7 +106,7 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
       setCommentText('');
     } catch (err) {
       console.error('Error adding comment:', err);
-      setError('Failed to add comment');
+      setError('Failed to post comment.');
     } finally {
       setCommentingLoading(false);
     }
@@ -125,15 +126,24 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
     }
   };
 
+  const handleShare = () => {
+    const text = `Check out "${travelogue?.title}"!`;
+    const url = window.location.origin;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(`${text} ${url}`);
+      alert('Link copied to clipboard!');
+    }
+  };
+
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   if (loading) {
     return (
-      <Dialog open={open !== false} onClose={onClose} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: '16px' } }}>
+      <Dialog open={open !== false} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '24px' } }}>
         <DialogContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
-          <CircularProgress />
+          <CircularProgress sx={{ color: '#4F8A8B' }} />
         </DialogContent>
       </Dialog>
     );
@@ -141,87 +151,49 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
 
   if (!travelogue) {
     return (
-      <Dialog open={open !== false} onClose={onClose} maxWidth="lg" fullWidth>
+      <Dialog open={open !== false} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '24px' } }}>
         <DialogContent>
-          <Alert severity="error">Failed to load travelogue</Alert>
+          <Alert severity="error">Failed to load travelogue detail</Alert>
         </DialogContent>
       </Dialog>
     );
   }
 
-  const [imageError, setImageError] = useState(false);
-
-  useEffect(() => {
-    // Reset image error when index changes
-    setImageError(false);
-  }, [imageIndex]);
-
   const mediaPath = travelogue?.images?.[imageIndex] || '';
-  const mediaUrl = React.useMemo(() => {
-    if (!mediaPath) {
-      return '/no-image.png';
-    }
-
-    const url = buildImageUrl(mediaPath);
-    return url;
-  }, [mediaPath]);
+  const mediaUrl = buildImageUrl(mediaPath);
   const mediaIsVideo = isVideoFile(mediaPath);
 
   return (
     <Dialog
       open={open !== false}
       onClose={onClose}
-      maxWidth="lg"
+      maxWidth="md"
       fullWidth
+      scroll="body"
       PaperProps={{
         sx: {
-          borderRadius: '16px',
-          maxHeight: '90vh',
-          overflow: 'auto'
+          borderRadius: '28px',
+          overflow: 'hidden',
+          boxShadow: '0 24px 70px rgba(0,0,0,0.15)',
+          border: '1px solid rgba(148,163,184,0.08)'
         }
       }}
     >
-      <DialogTitle sx={{ p: 0, position: 'relative' }}>
-        <IconButton
-          onClick={onClose}
-          sx={{
-            position: 'absolute',
-            right: 12,
-            top: 12,
-            zIndex: 10,
-            bgcolor: 'rgba(255,255,255,0.95)',
-            color: '#1a1a1a',
-            '&:hover': { bgcolor: '#fff' }
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
       <DialogContent sx={{ p: 0, bgcolor: '#ffffff' }}>
-        {/* Premium Image Carousel */}
+        
+        {/* Cinematic Media Carousel Hero Header */}
         <Box 
-          component={motion.div}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
           sx={{ 
             position: 'relative', 
             width: '100%',
-            height: { xs: 350, sm: 450, md: 600 }, 
-            bgcolor: '#f0f0f0', 
+            height: { xs: 320, sm: 420, md: 520 }, 
+            bgcolor: '#0f172a', 
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}
         >
-          {/* Loading State */}
-          {!mediaUrl && (
-            <CircularProgress sx={{ color: '#4F8A8B' }} />
-          )}
-
-          {/* Media with proper error handling */}
           {mediaIsVideo ? (
             <video
               key={`vid-${imageIndex}`}
@@ -245,239 +217,175 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                display: imageError ? 'none' : 'block'
-              }}
-              onError={(e) => {
-                console.error('Image load error:', mediaUrl, e);
-                setImageError(true);
-                e.target.style.display = 'none';
-              }}
-              onLoad={() => {
-                setImageError(false);
               }}
             />
           )}
 
-          {/* Fallback Image */}
-          {imageError && !mediaIsVideo && (
-            <Box
-              sx={{
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: '#e5e7eb',
-                color: '#6b7280',
-                fontSize: '1rem',
-                fontWeight: 600
-              }}
-            >
-              <Stack alignItems="center" spacing={1}>
-                <Box sx={{ fontSize: '48px' }}>🖼️</Box>
-                <Typography>Image not available</Typography>
-                <Typography variant="caption" color="#9ca3af">
-                  {mediaUrl}
-                </Typography>
-              </Stack>
-            </Box>
-          )}
-
-          {/* Premium Gradient Overlay */}
+          {/* Top dark gradient to shade controls */}
           <Box
             sx={{
               position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
-              bottom: 0,
-              background: 'radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.1) 100%)',
-              pointerEvents: 'none'
+              height: 90,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%)',
+              pointerEvents: 'none',
+              zIndex: 3
             }}
           />
 
-          {/* Close Button - Premium Style */}
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
+          {/* Floating Glassmorphic Close Button */}
+          <IconButton
+            onClick={onClose}
+            sx={{
+              position: 'absolute',
+              right: 20,
+              top: 20,
+              zIndex: 10,
+              bgcolor: 'rgba(255, 255, 255, 0.25)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#fff',
+              width: 40,
+              height: 40,
+              boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+              transition: 'all 0.2s ease',
+              '&:hover': { 
+                bgcolor: 'rgba(255, 255, 255, 0.35)',
+                transform: 'scale(1.05)'
+              }
+            }}
           >
-            <IconButton
-              onClick={onClose}
-              sx={{
-                position: 'absolute',
-                right: 20,
-                top: 20,
-                zIndex: 10,
-                bgcolor: 'rgba(255,255,255,0.15)',
-                backdropFilter: 'blur(10px)',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.2)',
-                width: 48,
-                height: 48,
-                '&:hover': { 
-                  bgcolor: 'rgba(255,255,255,0.25)',
-                  borderColor: 'rgba(255,255,255,0.4)'
-                }
-              }}
-            >
-              <CloseIcon />
-            </IconButton>
-          </motion.div>
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
 
-          {/* Navigation Buttons - Premium Style */}
+          {/* Left/Right Carousel Navigations */}
           {travelogue.images && travelogue.images.length > 1 && (
             <>
-              <motion.div
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
+              <IconButton
+                onClick={() => setImageIndex(prev => prev === 0 ? travelogue.images.length - 1 : prev - 1)}
+                sx={{
                   position: 'absolute',
-                  left: 16,
+                  left: 20,
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  zIndex: 5
+                  zIndex: 5,
+                  bgcolor: 'rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(8px)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  '&:hover': { bgcolor: 'rgba(79, 138, 139, 0.85)' }
                 }}
               >
-                <IconButton
-                  onClick={() => setImageIndex(prev => prev === 0 ? travelogue.images.length - 1 : prev - 1)}
-                  sx={{
-                    bgcolor: 'rgba(255,255,255,0.15)',
-                    backdropFilter: 'blur(10px)',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    '&:hover': { 
-                      bgcolor: 'rgba(79,138,139,0.8)',
-                      borderColor: 'rgba(79,138,139,1)'
-                    }
-                  }}
-                >
-                  <ChevronLeftIcon fontSize="large" />
-                </IconButton>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
+                <ChevronLeftIcon fontSize="medium" />
+              </IconButton>
+              <IconButton
+                onClick={() => setImageIndex(prev => prev === travelogue.images.length - 1 ? 0 : prev + 1)}
+                sx={{
                   position: 'absolute',
-                  right: 16,
+                  right: 20,
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  zIndex: 5
+                  zIndex: 5,
+                  bgcolor: 'rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(8px)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  '&:hover': { bgcolor: 'rgba(79, 138, 139, 0.85)' }
                 }}
               >
-                <IconButton
-                  onClick={() => setImageIndex(prev => prev === travelogue.images.length - 1 ? 0 : prev + 1)}
-                  sx={{
-                    bgcolor: 'rgba(255,255,255,0.15)',
-                    backdropFilter: 'blur(10px)',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    '&:hover': { 
-                      bgcolor: 'rgba(79,138,139,0.8)',
-                      borderColor: 'rgba(79,138,139,1)'
-                    }
-                  }}
-                >
-                  <ChevronRightIcon fontSize="large" />
-                </IconButton>
-              </motion.div>
+                <ChevronRightIcon fontSize="medium" />
+              </IconButton>
 
-              {/* Premium Image Indicators */}
+              {/* Slider Dots */}
               <Box
                 sx={{
                   position: 'absolute',
-                  bottom: 24,
+                  bottom: 20,
                   left: '50%',
                   transform: 'translateX(-50%)',
                   display: 'flex',
-                  gap: 1.5,
+                  gap: 1,
                   zIndex: 5,
-                  bgcolor: 'rgba(0,0,0,0.3)',
-                  backdropFilter: 'blur(10px)',
-                  px: 2.5,
-                  py: 1.5,
-                  borderRadius: '50px',
-                  border: '1px solid rgba(255,255,255,0.2)'
+                  bgcolor: 'rgba(0,0,0,0.4)',
+                  backdropFilter: 'blur(8px)',
+                  px: 2,
+                  py: 1,
+                  borderRadius: '30px',
+                  border: '1px solid rgba(255,255,255,0.1)'
                 }}
               >
                 {travelogue.images.map((_, idx) => (
-                  <motion.div
+                  <Box
                     key={idx}
-                    whileHover={{ scale: 1.3 }}
-                    whileTap={{ scale: 0.8 }}
-                  >
-                    <Box
-                      onClick={() => setImageIndex(idx)}
-                      sx={{
-                        width: idx === imageIndex ? 28 : 8,
-                        height: 8,
-                        borderRadius: '50px',
-                        background: idx === imageIndex 
-                          ? 'linear-gradient(135deg, #4F8A8B 0%, #6BA8AC 100%)'
-                          : 'rgba(255,255,255,0.3)',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        '&:hover': {
-                          background: idx === imageIndex 
-                            ? 'linear-gradient(135deg, #4F8A8B 0%, #6BA8AC 100%)'
-                            : 'rgba(255,255,255,0.5)'
-                        }
-                      }}
-                    />
-                  </motion.div>
+                    onClick={() => setImageIndex(idx)}
+                    sx={{
+                      width: idx === imageIndex ? 18 : 6,
+                      height: 6,
+                      borderRadius: '10px',
+                      background: idx === imageIndex ? '#4F8A8B' : 'rgba(255,255,255,0.3)',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }}
+                  />
                 ))}
               </Box>
-
-              {/* Counter */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                key={imageIndex}
-              >
-                <Typography
-                  sx={{
-                    position: 'absolute',
-                    top: 20,
-                    left: 20,
-                    bgcolor: 'rgba(0,0,0,0.4)',
-                    backdropFilter: 'blur(10px)',
-                    color: '#fff',
-                    px: 2,
-                    py: 0.8,
-                    borderRadius: '20px',
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    border: '1px solid rgba(255,255,255,0.2)'
-                  }}
-                >
-                  {imageIndex + 1} / {travelogue.images.length}
-                </Typography>
-              </motion.div>
             </>
+          )}
+
+          {/* Floating Slide Counter */}
+          {travelogue.images && travelogue.images.length > 1 && (
+            <Typography
+              sx={{
+                position: 'absolute',
+                top: 20,
+                left: 20,
+                bgcolor: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(8px)',
+                color: '#fff',
+                px: 1.5,
+                py: 0.5,
+                borderRadius: '10px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                border: '1px solid rgba(255,255,255,0.1)',
+                zIndex: 5
+              }}
+            >
+              {imageIndex + 1} / {travelogue.images.length}
+            </Typography>
           )}
         </Box>
 
-        {/* Content */}
-        <Box sx={{ p: { xs: 2, md: 4 } }}>
-          {/* Header */}
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={3} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+        {/* Content Wrapper */}
+        <Box sx={{ p: { xs: 3, md: 5 } }}>
+          
+          {/* Header Row */}
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} mb={3.5} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
             <Box>
-              <Typography variant="h4" fontWeight={800} color="#1a1a1a" mb={1} sx={{ letterSpacing: '0.5px' }}>
+              <Typography 
+                variant="h4" 
+                fontWeight={800} 
+                color="#0f172a" 
+                mb={1} 
+                sx={{ letterSpacing: '-0.5px', fontFamily: '"Sora", sans-serif' }}
+              >
                 {travelogue.title}
               </Typography>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <LocationOnIcon sx={{ fontSize: 20, color: '#4F8A8B' }} />
-                  <Typography variant="body1" fontWeight={600} color="#6B7280">
-                    {travelogue.location || travelogue.destination}
-                  </Typography>
-                </Stack>
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" gap={1.5}>
+                {travelogue.location && (
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <LocationOnIcon sx={{ fontSize: 18, color: '#4F8A8B' }} />
+                    <Typography variant="body2" fontWeight={700} color="#64748B">
+                      {travelogue.location}
+                    </Typography>
+                  </Stack>
+                )}
                 {travelogue.rating > 0 && (
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={0.5} alignItems="center">
                     <Rating value={travelogue.rating} readOnly size="small" />
-                    <Typography variant="body2" fontWeight={700} color="#4F8A8B">
+                    <Typography variant="body2" fontWeight={800} color="#4F8A8B" sx={{ fontSize: '0.85rem' }}>
                       {travelogue.rating.toFixed(1)}
                     </Typography>
                   </Stack>
@@ -485,19 +393,23 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
               </Stack>
             </Box>
 
-            {/* Action Buttons */}
-            <Stack direction="row" spacing={1}>
+            {/* Quick Actions Panel */}
+            <Stack direction="row" spacing={1.5}>
               <Button
                 variant={liked ? 'contained' : 'outlined'}
                 startIcon={liked ? <FavoriteIcon /> : <FavoriteBorderIcon />}
                 onClick={handleLike}
                 sx={{
-                  borderRadius: '10px',
+                  borderRadius: '12px',
                   color: liked ? '#fff' : '#ef4444',
                   bgcolor: liked ? '#ef4444' : 'transparent',
-                  borderColor: '#ef4444'
+                  borderColor: '#ef4444',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  px: 2.5,
+                  '&:hover': { bgcolor: liked ? '#dc2626' : 'rgba(239, 68, 68, 0.05)' }
                 }}
-                size="small"
+                size="medium"
               >
                 {travelogue.likes?.length || 0}
               </Button>
@@ -506,241 +418,278 @@ export default function TravelogueDetailView({ travelogueId, travelogue: initial
                 startIcon={saved ? <BookmarkIcon /> : <BookmarkBorderIcon />}
                 onClick={handleSave}
                 sx={{
-                  borderRadius: '10px',
-                  color: saved ? '#fff' : '#F9ED69',
-                  bgcolor: saved ? '#F9ED69' : 'transparent',
-                  borderColor: '#F9ED69'
+                  borderRadius: '12px',
+                  color: saved ? '#fff' : '#eab308',
+                  bgcolor: saved ? '#eab308' : 'transparent',
+                  borderColor: '#eab308',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  px: 2.5,
+                  '&:hover': { bgcolor: saved ? '#ca8a04' : 'rgba(234, 179, 8, 0.05)' }
                 }}
-                size="small"
+                size="medium"
               >
                 Save
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<ShareIcon />}
-                onClick={() => setShareMenuOpen(true)}
+                onClick={handleShare}
                 sx={{
-                  borderRadius: '10px',
+                  borderRadius: '12px',
                   color: '#4F8A8B',
-                  borderColor: '#4F8A8B'
+                  borderColor: 'rgba(79, 138, 139, 0.4)',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  px: 2.5,
+                  '&:hover': { borderColor: '#4F8A8B', bgcolor: 'rgba(79, 138, 139, 0.05)' }
                 }}
-                size="small"
+                size="medium"
               >
                 Share
               </Button>
             </Stack>
           </Stack>
 
-          <Stack direction="row" spacing={1.5} flexWrap="wrap" mb={2}>
-            <Chip
-              label={`${travelogue.likes?.length || 0} likes`}
-              sx={{ bgcolor: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 700 }}
-            />
-            <Chip
-              label={`${travelogue.comments?.length || 0} comments`}
-              sx={{ bgcolor: 'rgba(79,138,139,0.12)', color: '#4F8A8B', fontWeight: 700 }}
-            />
-            <Chip
-              label={`${travelogue.saves?.length || 0} saves`}
-              sx={{ bgcolor: 'rgba(249,237,105,0.2)', color: '#B8860B', fontWeight: 700 }}
-            />
-          </Stack>
+          <Divider sx={{ my: 3.5 }} />
 
-          <Divider sx={{ my: 3 }} />
-
-          {/* Author Info */}
-          <Stack direction="row" spacing={2} alignItems="center" mb={4} sx={{ p: 2, bgcolor: 'rgba(79,138,139,0.03)', borderRadius: '12px' }}>
-            <Avatar
-              src={
-                travelogue.userId?.avatar
-                  ? buildImageUrl(travelogue.userId.avatar)
-                  : '/default-avatar.png'
-              }
-              sx={{ width: 56, height: 56 }}
-            />
-            <Box flex={1}>
-              <Typography variant="h6" fontWeight={700} color="#1a1a1a">
-                {travelogue.userId?.name}
-              </Typography>
-              <Typography variant="body2" color="#6B7280">
-                Published on {formatDate(travelogue.createdAt)}
-              </Typography>
-            </Box>
-          </Stack>
-
-          {/* Trip Statistics */}
-          <Grid container spacing={2} mb={4}>
-            {travelogue.duration && (
-              <Grid item xs={6} sm={3}>
-                <Card elevation={0} sx={{ p: 2, textAlign: 'center', border: '1px solid rgba(79,138,139,0.1)', borderRadius: '12px' }}>
-                  <CalendarTodayIcon sx={{ fontSize: 28, color: '#4F8A8B', mb: 1 }} />
-                  <Typography variant="body2" fontWeight={700} color="#6B7280">
-                    {travelogue.duration} Days
-                  </Typography>
-                </Card>
-              </Grid>
-            )}
-            {travelogue.travelersCount && (
-              <Grid item xs={6} sm={3}>
-                <Card elevation={0} sx={{ p: 2, textAlign: 'center', border: '1px solid rgba(79,138,139,0.1)', borderRadius: '12px' }}>
-                  <GroupIcon sx={{ fontSize: 28, color: '#4F8A8B', mb: 1 }} />
-                  <Typography variant="body2" fontWeight={700} color="#6B7280">
-                    {travelogue.travelersCount} Travelers
-                  </Typography>
-                </Card>
-              </Grid>
-            )}
-            {travelogue.estimatedCost && (
-              <Grid item xs={6} sm={3}>
-                <Card elevation={0} sx={{ p: 2, textAlign: 'center', border: '1px solid rgba(79,138,139,0.1)', borderRadius: '12px' }}>
-                  <MonetizationOnIcon sx={{ fontSize: 28, color: '#4F8A8B', mb: 1 }} />
-                  <Typography variant="body2" fontWeight={700} color="#6B7280">
-                    ₹{travelogue.estimatedCost}
-                  </Typography>
-                </Card>
-              </Grid>
-            )}
-            {travelogue.views && (
-              <Grid item xs={6} sm={3}>
-                <Card elevation={0} sx={{ p: 2, textAlign: 'center', border: '1px solid rgba(79,138,139,0.1)', borderRadius: '12px' }}>
-                  <Typography variant="h6" fontWeight={700} color="#4F8A8B" mb={0.5}>
-                    {travelogue.views}
-                  </Typography>
-                  <Typography variant="body2" fontWeight={700} color="#6B7280">
-                    Views
-                  </Typography>
-                </Card>
-              </Grid>
-            )}
-          </Grid>
-
-          {/* Tags */}
-          {travelogue.tags && travelogue.tags.length > 0 && (
-            <Box mb={4}>
-              <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-                {travelogue.tags.map(tag => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    sx={{
-                      fontWeight: 600,
-                      bgcolor: 'rgba(79,138,139,0.1)',
-                      color: '#4F8A8B'
-                    }}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {/* Main Content */}
-          <Typography
-            variant="body1"
-            color="#4a5568"
-            sx={{
-              lineHeight: 1.8,
-              mb: 4,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word'
-            }}
-          >
-            {travelogue.description}
-          </Typography>
-
-          {/* Highlights */}
-          {travelogue.highlights && travelogue.highlights.length > 0 && (
-            <Box mb={4}>
-              <Typography variant="h6" fontWeight={700} color="#1a1a1a" mb={2}>
-                Key Highlights
-              </Typography>
-              <Stack spacing={1}>
-                {travelogue.highlights.map((highlight, idx) => (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F8A8B' }} />
-                    <Typography color="#6B7280">{highlight}</Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          <Divider sx={{ my: 4 }} />
-
-          {/* Comments Section */}
-          <Typography variant="h6" fontWeight={700} color="#1a1a1a" mb={3}>
-            Comments ({travelogue.comments?.length || 0})
-          </Typography>
-
-          {/* Add Comment */}
-          <Card elevation={0} sx={{ p: 2.5, mb: 3, border: '1px solid rgba(79,138,139,0.1)', borderRadius: '12px' }}>
-            <Stack spacing={2}>
-              <TextField
-                placeholder="Share your thoughts..."
-                multiline
-                rows={3}
-                fullWidth
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                disabled={commentingLoading}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '10px'
+          {/* Main Layout Grid */}
+          <Grid container spacing={4}>
+            
+            {/* Left Column (Details) */}
+            <Grid item xs={12} md={8}>
+              
+              {/* Author Card Info */}
+              <Stack direction="row" spacing={2} alignItems="center" mb={4} sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '18px', border: '1px solid rgba(148,163,184,0.1)' }}>
+                <Avatar
+                  src={
+                    travelogue.userId?.avatar
+                      ? buildImageUrl(travelogue.userId.avatar)
+                      : '/default-avatar.png'
                   }
-                }}
-              />
-              <Button
-                variant="contained"
-                endIcon={<SendIcon />}
-                disabled={!commentText.trim() || commentingLoading}
-                onClick={handleAddComment}
+                  sx={{ width: 50, height: 50, border: '2px solid #fff', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}
+                />
+                <Box>
+                  <Typography variant="body1" fontWeight={800} color="#0f172a">
+                    {travelogue.userId?.name || 'Anonymous Explorer'}
+                  </Typography>
+                  <Typography variant="caption" color="#64748B" fontWeight={500}>
+                    Published on {formatDate(travelogue.createdAt)}
+                  </Typography>
+                </Box>
+              </Stack>
+
+              {/* Journal Entry text content */}
+              <Typography
+                variant="body1"
+                color="#334155"
                 sx={{
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #4F8A8B 0%, #6BA8AC 100%)',
-                  alignSelf: 'flex-end'
+                  lineHeight: 1.8,
+                  fontSize: '1.025rem',
+                  mb: 4.5,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily: '"Plus Jakarta Sans", sans-serif'
                 }}
               >
-                {commentingLoading ? 'Posting...' : 'Post Comment'}
-              </Button>
-            </Stack>
-          </Card>
+                {travelogue.description}
+              </Typography>
 
-          {/* Comments List */}
-          <Stack spacing={2}>
-            {travelogue.comments && travelogue.comments.map(comment => (
-              <Card key={comment._id} elevation={0} sx={{ p: 2, border: '1px solid rgba(79,138,139,0.1)', borderRadius: '12px' }}>
-                <Stack direction="row" spacing={2} mb={2}>
-                  <Avatar src={comment.userId?.avatar} sx={{ width: 40, height: 40 }} />
-                  <Box flex={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Typography variant="subtitle2" fontWeight={700} color="#1a1a1a">
+              {/* Highlights section if available */}
+              {travelogue.highlights && travelogue.highlights.length > 0 && (
+                <Box mb={5}>
+                  <Typography variant="subtitle1" fontWeight={800} color="#0f172a" mb={2} sx={{ fontFamily: '"Sora", sans-serif' }}>
+                    Journey Highlights
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {travelogue.highlights.map((highlight, idx) => (
+                      <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F8A8B', flexShrink: 0 }} />
+                        <Typography color="#475569" fontWeight={500} sx={{ fontSize: '0.95rem' }}>{highlight}</Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* Tags block */}
+              {travelogue.tags && travelogue.tags.length > 0 && (
+                <Box mb={5}>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                    {travelogue.tags.map(tag => (
+                      <Chip
+                        key={tag}
+                        label={tag}
+                        sx={{
+                          fontWeight: 700,
+                          bgcolor: 'rgba(79,138,139,0.06)',
+                          color: '#4F8A8B',
+                          border: '1px solid rgba(79,138,139,0.1)',
+                          fontSize: '0.75rem',
+                          height: 26
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Right Column (Overview Metrics Panel) */}
+            <Grid item xs={12} md={4}>
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  p: 3, 
+                  bgcolor: '#f8fafc', 
+                  borderRadius: '24px', 
+                  border: '1px solid rgba(148, 163, 184, 0.12)',
+                  position: 'sticky',
+                  top: 24
+                }}
+              >
+                <Typography variant="subtitle2" fontWeight={800} color="#0f172a" mb={2.5} sx={{ fontFamily: '"Sora", sans-serif', letterSpacing: '0.2px' }}>
+                  TRIP TIMELINES
+                </Typography>
+                
+                <Stack spacing={2}>
+                  {travelogue.duration && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#fff', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.08)' }}>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <CalendarTodayIcon sx={{ color: '#4F8A8B', fontSize: 20 }} />
+                        <Typography variant="body2" fontWeight={600} color="#64748B">Duration</Typography>
+                      </Stack>
+                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">{travelogue.duration} Days</Typography>
+                    </Box>
+                  )}
+                  {travelogue.travelersCount && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#fff', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.08)' }}>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <GroupIcon sx={{ color: '#4F8A8B', fontSize: 20 }} />
+                        <Typography variant="body2" fontWeight={600} color="#64748B">Travelers</Typography>
+                      </Stack>
+                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">{travelogue.travelersCount} People</Typography>
+                    </Box>
+                  )}
+                  {travelogue.estimatedCost && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#fff', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.08)' }}>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <MonetizationOnIcon sx={{ color: '#4F8A8B', fontSize: 20 }} />
+                        <Typography variant="body2" fontWeight={600} color="#64748B">Est. Cost</Typography>
+                      </Stack>
+                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">₹{travelogue.estimatedCost}</Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#fff', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.08)' }}>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <VisibilityIcon sx={{ color: '#4F8A8B', fontSize: 20 }} />
+                      <Typography variant="body2" fontWeight={600} color="#64748B">Total Views</Typography>
+                    </Stack>
+                    <Typography variant="subtitle2" fontWeight={800} color="#0f172a">{travelogue.views || 0}</Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ my: 5 }} />
+
+          {/* Timeline / Comments Layout Section */}
+          <Box sx={{ maxWidth: 750 }}>
+            <Typography variant="h6" fontWeight={800} color="#0f172a" mb={3} sx={{ fontFamily: '"Sora", sans-serif' }}>
+              Conversations ({travelogue.comments?.length || 0})
+            </Typography>
+
+            {/* Comment Composer */}
+            <Paper elevation={0} sx={{ p: 2.5, mb: 4, bgcolor: '#f8fafc', borderRadius: '18px', border: '1px solid rgba(148,163,184,0.1)' }}>
+              <Stack direction="row" spacing={2} alignItems="flex-start">
+                <Avatar
+                  src={JSON.parse(localStorage.getItem('user') || '{}').avatar ? buildImageUrl(JSON.parse(localStorage.getItem('user') || '{}').avatar) : '/default-avatar.png'}
+                  sx={{ width: 36, height: 36, mt: 0.5 }}
+                />
+                <Stack spacing={2} sx={{ flexGrow: 1 }}>
+                  <TextField
+                    placeholder="Ask a question or share your thoughts..."
+                    multiline
+                    rows={2}
+                    fullWidth
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    disabled={commentingLoading}
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '14px',
+                        bgcolor: '#fff',
+                        '&.Mui-focused fieldset': { borderColor: '#4F8A8B' }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="contained"
+                    endIcon={<SendIcon />}
+                    disabled={!commentText.trim() || commentingLoading}
+                    onClick={handleAddComment}
+                    sx={{
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #4F8A8B 0%, #6BA8AC 100%)',
+                      alignSelf: 'flex-end',
+                      px: 3,
+                      py: 1,
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 8px 18px rgba(79, 138, 139, 0.25)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #5ea1a2 0%, #7cbfc3 100%)',
+                      }
+                    }}
+                  >
+                    {commentingLoading ? 'Posting...' : 'Post Comment'}
+                  </Button>
+                </Stack>
+              </Stack>
+            </Paper>
+
+            {/* Comments List Timeline */}
+            <Stack spacing={2.5}>
+              {travelogue.comments && travelogue.comments.map(comment => (
+                <Box key={comment._id} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Avatar 
+                    src={comment.userId?.avatar ? buildImageUrl(comment.userId.avatar) : '/default-avatar.png'} 
+                    sx={{ width: 36, height: 36, border: '1px solid rgba(148,163,184,0.2)' }} 
+                  />
+                  <Box sx={{ flexGrow: 1, p: 2, bgcolor: '#f8fafc', borderRadius: '16px', border: '1px solid rgba(148,163,184,0.08)' }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.6}>
+                      <Typography variant="subtitle2" fontWeight={800} color="#1e293b">
                         {comment.userName || comment.userId?.name}
                       </Typography>
                       {comment.userId === userId && (
                         <IconButton
                           size="small"
                           onClick={() => handleDeleteComment(comment._id)}
-                          sx={{ color: '#ef4444' }}
+                          sx={{ color: '#ef4444', p: 0.5 }}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       )}
                     </Stack>
-                    <Typography variant="caption" color="#6B7280">
+                    <Typography variant="caption" color="#94a3b8" sx={{ display: 'block', mb: 1, fontWeight: 500 }}>
                       {formatDate(comment.createdAt)}
                     </Typography>
+                    <Typography color="#334155" variant="body2" sx={{ lineHeight: 1.5, fontWeight: 500 }}>
+                      {comment.text}
+                    </Typography>
                   </Box>
-                </Stack>
-                <Typography color="#4a5568" variant="body2" sx={{ ml: 7 }}>
-                  {comment.text}
+                </Box>
+              ))}
+
+              {(!travelogue.comments || travelogue.comments.length === 0) && (
+                <Typography color="#94a3b8" textAlign="center" variant="body2" sx={{ py: 4, fontWeight: 500 }}>
+                  No comments yet. Start the conversation!
                 </Typography>
-              </Card>
-            ))}
-            {(!travelogue.comments || travelogue.comments.length === 0) && (
-              <Typography color="#6B7280" textAlign="center" variant="body2">
-                No comments yet. Be the first to share!
-              </Typography>
-            )}
-          </Stack>
+              )}
+            </Stack>
+          </Box>
         </Box>
       </DialogContent>
     </Dialog>

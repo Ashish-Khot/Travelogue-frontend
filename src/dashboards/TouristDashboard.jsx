@@ -1,13 +1,12 @@
 
 // Modern, premium Tourist Dashboard using MUI v5 and Framer Motion
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import CssBaseline from '@mui/material/CssBaseline';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { ThemeProvider } from '@mui/material/styles';
-import { io } from 'socket.io-client';
 import theme from '../theme';
-import { SOCKET_BASE_URL } from '../config/runtime';
+import api from '../api';
 import AppBarTop from './components/AppBarTop';
 import SidebarNav from './components/SidebarNav';
 
@@ -32,6 +31,50 @@ import WeatherSearch from './components/WeatherSearch';
 import VirtualGuide from './components/VirtualGuide';
 import ItineraryPlannerModule from './components/ItineraryPlannerModule';
 import { Tabs, Tab } from '@mui/material';
+import { ErrorBoundary } from '../ErrorBoundary';
+
+const normalizeTravelogueSubTab = (tab) => {
+  const map = {
+    create: 'create',
+    my: 'my',
+    explore: 'explore',
+    stories: 'explore',
+    story: 'explore',
+    feed: 'explore'
+  };
+
+  return map[tab] || 'create';
+};
+
+const toTimestamp = (value) => {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const buildChatNotificationsFromContacts = (contacts = []) => {
+  const unreadContacts = contacts
+    .filter((contact) => Number(contact?.unreadCount || 0) > 0)
+    .sort((a, b) => {
+      const aTime = toTimestamp(a?.lastMessageAt || a?.lastMessage?.createdAt);
+      const bTime = toTimestamp(b?.lastMessageAt || b?.lastMessage?.createdAt);
+      return bTime - aTime;
+    });
+
+  return unreadContacts.reduce((acc, contact) => {
+    const contactId = String(contact.userId || '');
+    if (!contactId) return acc;
+    acc[contactId] = {
+      name: contact.name || (contact.type === 'hotel' ? 'Hotel' : 'Guide'),
+      unreadCount: Number(contact.unreadCount || 0),
+      preview: contact.preview || '',
+      timestamp: toTimestamp(contact.lastMessageAt || contact.lastMessage?.createdAt),
+      chatId: contact.chatId || '',
+      avatar: contact.avatar || ''
+    };
+    return acc;
+  }, {});
+};
 
 function TouristDashboard() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -57,62 +100,42 @@ function TouristDashboard() {
 
   // Chat notifications state - tracks unread messages from guides
   const [chatNotifications, setChatNotifications] = useState({});
-  const socketRef = useRef(null);
 
   // Save theme preference
   useEffect(() => {
     localStorage.setItem('travelogue_dark_mode', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
-  // Initialize Socket.io connection and listen for incoming chat messages
+  // Sync chat unread summary for sidebar/appbar badges
   useEffect(() => {
-    if (!socketRef.current) {
-      socketRef.current = io(SOCKET_BASE_URL, {
-        query: {
-          userId: user._id || user.userId,
-          userType: 'tourist'
-        }
-      });
+    const touristId = user.userId || user._id;
+    if (!touristId || user.role !== 'tourist') return;
 
-      // Listen for new incoming messages
-      socketRef.current.on('chat.message', (message) => {
-        console.log('[TouristDashboard] Received chat message:', message);
-        
-        // Only add notification if sender is a guide and recipient is this tourist
-        if (message.senderId && message.senderName) {
-          setChatNotifications((prev) => {
-            const guideId = message.senderId;
-            const current = prev[guideId] || { name: message.senderName, unreadCount: 0, messages: [] };
-            return {
-              ...prev,
-              [guideId]: {
-                name: message.senderName,
-                unreadCount: current.unreadCount + 1,
-                preview: message.content || message.text || '...',
-                timestamp: new Date(message.timestamp).getTime(),
-                chatId: message.chatId || '',
-                avatar: message.senderAvatar || ''
-              }
-            };
-          });
-        }
-      });
+    let isMounted = true;
+    const syncChatSummary = async () => {
+      try {
+        const response = await api.get(`/chat/tourist/${touristId}/contacts`);
+        if (!isMounted) return;
+        const contacts = response?.data?.contacts || [];
+        setChatNotifications(buildChatNotificationsFromContacts(contacts));
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('[TouristDashboard] Failed to sync chat summary:', err);
+      }
+    };
 
-      // Clean up on unmount
-      return () => {
-        if (socketRef.current) {
-          socketRef.current.off('chat.message');
-        }
-      };
-    }
-  }, [user._id, user.userId]);
+    syncChatSummary();
+    const interval = setInterval(syncChatSummary, 15000);
 
-  // Clear chat notifications when navigating to Chat
-  useEffect(() => {
-    if (selectedTab === 'Chat') {
-      setChatNotifications({});
-    }
-  }, [selectedTab]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user._id, user.userId, user.role]);
+
+  const handleChatSummaryChange = (contacts = []) => {
+    setChatNotifications(buildChatNotificationsFromContacts(contacts));
+  };
 
   // Save sidebar preferences
   useEffect(() => {
@@ -246,7 +269,7 @@ function TouristDashboard() {
     const handleTravelogueSubTab = (event) => {
       if (event?.detail?.tab) {
         setSelectedTab('Travelogue');
-        setTravelogueSubTab(event.detail.tab);
+        setTravelogueSubTab(normalizeTravelogueSubTab(event.detail.tab));
       }
     };
     window.addEventListener('travelogueSubTab', handleTravelogueSubTab);
@@ -372,6 +395,7 @@ function TouristDashboard() {
             <ChatPanel
               chatTarget={chatTarget}
               onChatHandled={() => setChatTarget(null)}
+              onContactSummariesChange={handleChatSummaryChange}
             />
           )}
           {selectedTab === 'Reviews' && (
@@ -386,8 +410,8 @@ function TouristDashboard() {
               <Box
                 sx={{
                   borderRadius: '20px',
-                  p: { xs: 2.5, md: 3.5 },
-                  mb: 3,
+                  p: { xs: 2, md: 2.4 },
+                  mb: 2,
                   color: '#0F172A',
                   background: 'linear-gradient(135deg, rgba(79,138,139,0.12) 0%, rgba(249,237,105,0.12) 100%)',
                   border: '1px solid rgba(79,138,139,0.12)',
@@ -418,10 +442,10 @@ function TouristDashboard() {
                   }}
                 />
                 <Box sx={{ position: 'relative', zIndex: 1 }}>
-                  <Box sx={{ fontWeight: 800, fontSize: { xs: '1.4rem', md: '2rem' }, mb: 1 }}>
+                  <Box sx={{ fontWeight: 800, fontSize: { xs: '1.25rem', md: '1.65rem' }, mb: 0.6 }}>
                     Travelogue Studio
                   </Box>
-                  <Box sx={{ color: '#475569', fontWeight: 500, maxWidth: 520 }}>
+                  <Box sx={{ color: '#475569', fontWeight: 500, maxWidth: 520, fontSize: { xs: '0.9rem', md: '0.97rem' } }}>
                     Share cinematic travel stories, discover authentic experiences, and keep your travel memory vault in one place.
                   </Box>
                 </Box>
@@ -431,13 +455,13 @@ function TouristDashboard() {
               <Box sx={{
                 bgcolor: '#ffffff',
                 borderRadius: '16px',
-                mb: 3,
+                mb: 2,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                 overflow: 'hidden'
               }}>
                 <Tabs
                   value={travelogueSubTab}
-                  onChange={(e, newValue) => setTravelogueSubTab(newValue)}
+                  onChange={(e, newValue) => setTravelogueSubTab(normalizeTravelogueSubTab(newValue))}
                   variant="scrollable"
                   scrollButtons="auto"
                   allowScrollButtonsMobile
@@ -468,7 +492,11 @@ function TouristDashboard() {
               {/* Sub-tab Content */}
               {travelogueSubTab === 'create' && <CreateTravelogue />}
               {travelogueSubTab === 'my' && <MyTravelogues />}
-              {travelogueSubTab === 'explore' && <TravelogueStories />}
+              {travelogueSubTab === 'explore' && (
+                <ErrorBoundary>
+                  <TravelogueStories />
+                </ErrorBoundary>
+              )}
             </Box>
           )}
           {selectedTab === 'Travel Tips' && <TravelTipsPanel />}

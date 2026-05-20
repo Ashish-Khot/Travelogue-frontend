@@ -80,7 +80,119 @@ const resolveId = (value) => {
   return String(value);
 };
 
-export default function ChatPanel({ chatTarget, onChatHandled }) {
+const toTimestamp = (value) => {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const formatConversationTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    now.getFullYear() === date.getFullYear() &&
+    now.getMonth() === date.getMonth() &&
+    now.getDate() === date.getDate();
+
+  if (sameDay) {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const buildMessagePreview = (message) => {
+  if (!message) return '';
+  if (message.isDeleted) return 'Message deleted';
+  if (message.messageType === 'IMAGE') return message.content || message.attachmentName || 'Image';
+  if (message.messageType === 'FILE') return message.attachmentName || message.content || 'File';
+  return message.content || '';
+};
+
+const getContactSortTime = (contact) =>
+  toTimestamp(contact?.lastMessageAt || contact?.lastMessage?.createdAt);
+
+const sortContactsByLatest = (items = []) =>
+  [...items].sort((a, b) => {
+    const diff = getContactSortTime(b) - getContactSortTime(a);
+    if (diff !== 0) return diff;
+    return (a?.name || '').localeCompare(b?.name || '');
+  });
+
+const normalizeContact = (contact = {}) => {
+  const userId = contact?.userId ? String(contact.userId) : '';
+  if (!userId) return null;
+
+  const rawAvatar = typeof contact.avatar === 'string' ? contact.avatar : '';
+  const avatar = rawAvatar ? buildImageUrl(rawAvatar) : '';
+  const unreadCount = Number.isFinite(Number(contact.unreadCount))
+    ? Math.max(0, Number(contact.unreadCount))
+    : 0;
+  const preview = contact.preview || buildMessagePreview(contact.lastMessage);
+
+  return {
+    ...contact,
+    userId,
+    name: contact.name || (contact.type === 'hotel' ? 'Hotel' : 'Guide'),
+    avatar,
+    email: contact.email || '',
+    subtitle: contact.subtitle || '',
+    type: contact.type === 'hotel' ? 'hotel' : 'guide',
+    lastMessage: contact.lastMessage || null,
+    lastMessageAt: contact.lastMessageAt || contact.lastMessage?.createdAt || null,
+    preview,
+    unreadCount
+  };
+};
+
+const mergeContacts = (current = [], incoming = []) => {
+  const byId = new Map();
+
+  current.forEach((item) => {
+    const normalized = normalizeContact(item);
+    if (normalized) byId.set(normalized.userId, normalized);
+  });
+
+  incoming.forEach((item) => {
+    const normalized = normalizeContact(item);
+    if (!normalized) return;
+
+    const existing = byId.get(normalized.userId);
+    if (!existing) {
+      byId.set(normalized.userId, normalized);
+      return;
+    }
+
+    const nextTime = getContactSortTime(normalized);
+    const existingTime = getContactSortTime(existing);
+    const useNextActivity = nextTime >= existingTime;
+
+    byId.set(normalized.userId, {
+      ...existing,
+      ...normalized,
+      lastMessage: useNextActivity
+        ? normalized.lastMessage || existing.lastMessage || null
+        : existing.lastMessage || normalized.lastMessage || null,
+      lastMessageAt: useNextActivity
+        ? normalized.lastMessageAt || existing.lastMessageAt || null
+        : existing.lastMessageAt || normalized.lastMessageAt || null,
+      preview: useNextActivity
+        ? normalized.preview || existing.preview || ''
+        : existing.preview || normalized.preview || '',
+      unreadCount:
+        normalized.unreadCount !== undefined && normalized.unreadCount !== null
+          ? normalized.unreadCount
+          : existing.unreadCount || 0
+    });
+  });
+
+  return sortContactsByLatest(Array.from(byId.values()));
+};
+
+export default function ChatPanel({ chatTarget, onChatHandled, onContactSummariesChange = () => {} }) {
   const [contacts, setContacts] = useState([]);
   const [filteredContacts, setFilteredContacts] = useState([]);
   const [search, setSearch] = useState('');
@@ -104,6 +216,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
   const socketRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const refreshContactsRef = useRef(async () => {});
   const isMobile = useMediaQuery('(max-width:900px)');
   const [showConversationList, setShowConversationList] = useState(true);
 
@@ -119,132 +232,148 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
     }
   }, [isMobile, selectedContact]);
 
-  // Fetch user and chat contacts (guides + hotels) for this tourist
+  useEffect(() => {
+    onContactSummariesChange(contacts);
+  }, [contacts, onContactSummariesChange]);
+
+  // Fetch user and chat contacts
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-
-    const buildUniqueList = (items) => {
-      const map = new Map();
-      items.forEach((item) => {
-        if (!item?.userId) return;
-        const normalizedId = String(item.userId);
-        if (!map.has(normalizedId)) {
-          map.set(normalizedId, { ...item, userId: normalizedId });
-        }
-      });
-      return Array.from(map.values());
-    };
+    if (!storedUser) return;
+    const parsedUser = JSON.parse(storedUser);
+    setUser(parsedUser);
 
     const loadContacts = async () => {
-      const tourist = storedUser ? JSON.parse(storedUser) : null;
-      if (tourist && tourist.role === 'tourist') {
-        const touristId = tourist.userId || tourist._id;
-        const [guideRes, hotelRes] = await Promise.allSettled([
-          api.get(`/booking/tourist/${touristId}`),
-          api.get('/hotel/list')
-        ]);
-
-        const guideBookings = guideRes.status === 'fulfilled' ? (guideRes.value?.data?.bookings || []) : [];
-        const hotelUsers = hotelRes.status === 'fulfilled' ? (hotelRes.value?.data?.hotels || []) : [];
-
-        const guideContacts = guideBookings
-            .map((b) => {
-              const guide = b.guideId && typeof b.guideId === 'object' ? b.guideId : null;
-              const guideId = guide?._id || guide?.userId || b.guideId;
-              if (!guideId) return null;
-              const guideAvatar = guide?.avatar || guide?.userId?.avatar || guide?.userId?.profileImage || '';
-              return {
-                userId: String(guideId),
-                name: guide?.name || b.guideName || 'Guide',
-                avatar: buildImageUrl(guideAvatar),
-                email: guide?.email || '',
-                subtitle: guide?.country || '',
-                type: 'guide',
-              };
-            })
-            .filter(Boolean);
-
-        const hotelContacts = hotelUsers
-          .map((hotel) => {
-            const ownerId = hotel?.user || hotel?.ownerId || hotel?.userId;
-            if (!ownerId) return null;
-            const image = hotel?.images?.[0] || hotel?.profile?.images?.[0] || '';
-            const avatar = buildImageUrl(image);
-            return {
-              userId: String(ownerId),
-              name: hotel?.name || hotel?.ownerName || 'Hotel',
-              avatar,
-              email: hotel?.ownerEmail || hotel?.email || '',
-              subtitle: hotel?.ownerName ? `Owner: ${hotel.ownerName}` : 'Hotel admin',
-              type: 'hotel',
-            };
-          })
+      if (parsedUser.role === 'tourist') {
+        const touristId = parsedUser.userId || parsedUser._id;
+        if (!touristId) return;
+        const response = await api.get(`/chat/tourist/${touristId}/contacts?includeAll=true`);
+        const contactList = (response?.data?.contacts || [])
+          .map((item) => normalizeContact(item))
           .filter(Boolean);
-
-        const merged = buildUniqueList([...hotelContacts, ...guideContacts]);
-        setContacts((prev) => buildUniqueList([...merged, ...prev]));
-        setFilteredContacts((prev) => buildUniqueList([...merged, ...prev]));
+        setContacts((prev) => mergeContacts(prev, contactList));
       } else {
-        // fallback: show all guides
+        // fallback for non-tourist users
         const res = await api.get('/guide');
-        const allGuides = (res.data.guides || []).map((g) => ({
-          userId: String(g.userId?._id || g.userId || g._id),
-          name: g.userId?.name || g.name || 'Guide',
-          avatar: buildImageUrl(g.userId?.avatar || g.avatar || ''),
-          email: g.userId?.email || g.email || '',
-          subtitle: g.userId?.country || g.country || '',
-          type: 'guide',
-        }));
-        setContacts((prev) => buildUniqueList([...allGuides, ...prev]));
-        setFilteredContacts((prev) => buildUniqueList([...allGuides, ...prev]));
+        const allGuides = (res.data.guides || [])
+          .map((g) =>
+            normalizeContact({
+              userId: String(g.userId?._id || g.userId || g._id),
+              name: g.userId?.name || g.name || 'Guide',
+              avatar: g.userId?.avatar || g.avatar || '',
+              email: g.userId?.email || g.email || '',
+              subtitle: g.userId?.country || g.country || '',
+              type: 'guide',
+              unreadCount: 0
+            })
+          )
+          .filter(Boolean);
+        setContacts((prev) => mergeContacts(prev, allGuides));
       }
     };
 
-    loadContacts();
+    refreshContactsRef.current = async () => {
+      try {
+        await loadContacts();
+      } catch (err) {
+        console.error('[ChatPanel] Failed to refresh contacts:', err);
+      }
+    };
+
+    let isMounted = true;
+    const safeLoad = async () => {
+      if (!isMounted) return;
+      await refreshContactsRef.current();
+    };
+
+    safeLoad();
+    const interval = setInterval(safeLoad, 12000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Filter contacts by search
   useEffect(() => {
     const query = search.trim().toLowerCase();
-    setFilteredContacts(
+    const next = sortContactsByLatest(
       contacts.filter((c) => {
         const typeMatch = contactTypeFilter === 'all' || c.type === contactTypeFilter;
         const searchMatch =
           !query ||
           c.name?.toLowerCase().includes(query) ||
           c.email?.toLowerCase().includes(query) ||
-          c.subtitle?.toLowerCase().includes(query);
+          c.subtitle?.toLowerCase().includes(query) ||
+          c.preview?.toLowerCase().includes(query);
         return typeMatch && searchMatch;
       })
     );
+    setFilteredContacts(next);
   }, [search, contacts, contactTypeFilter]);
 
   useEffect(() => {
+    if (!selectedContact?.userId) return;
+    const latest = contacts.find((item) => item.userId === selectedContact.userId);
+    if (!latest) return;
+    setSelectedContact((prev) => {
+      if (!prev || prev.userId !== latest.userId) return prev;
+      const shouldUpdate =
+        prev.name !== latest.name ||
+        prev.avatar !== latest.avatar ||
+        prev.subtitle !== latest.subtitle ||
+        prev.unreadCount !== latest.unreadCount ||
+        prev.chatId !== latest.chatId;
+      return shouldUpdate ? { ...prev, ...latest } : prev;
+    });
+  }, [contacts, selectedContact?.userId]);
+
+  useEffect(() => {
     if (!chatTarget?.userId) return;
-    const normalized = {
+    const normalized = normalizeContact({
       userId: String(chatTarget.userId),
       name: chatTarget.name || (chatTarget.type === 'hotel' ? 'Hotel' : 'Guide'),
-      avatar: buildImageUrl(chatTarget.avatar || ''),
+      avatar: chatTarget.avatar || '',
       email: chatTarget.email || '',
       subtitle: chatTarget.subtitle || '',
       type: chatTarget.type || 'guide',
-    };
-    setContacts((prev) => {
-      const exists = prev.find((c) => c.userId === normalized.userId);
-      if (exists) return prev;
-      return [normalized, ...prev];
+      unreadCount: 0
     });
+    if (!normalized) return;
+
+    setContacts((prev) => mergeContacts(prev, [normalized]));
     setSelectedContact((prev) => {
-      if (prev?.userId === normalized.userId) return prev;
-      return normalized;
+      if (prev?.userId === normalized.userId) return { ...prev, ...normalized };
+      return { ...normalized };
     });
     if (onChatHandled) onChatHandled();
   }, [chatTarget, onChatHandled]);
 
+  const markChatAsRead = async (activeChatId, contactUserId) => {
+    if (!activeChatId) return;
+    try {
+      await api.post(`/chat/${activeChatId}/read`);
+    } catch (err) {
+      // Keep UI responsive even if read endpoint fails momentarily
+    }
+
+    const normalizedContactId = contactUserId ? String(contactUserId) : '';
+    if (normalizedContactId) {
+      setContacts((prev) =>
+        sortContactsByLatest(
+          prev.map((item) =>
+            item.userId === normalizedContactId ? { ...item, unreadCount: 0, chatId: activeChatId } : item
+          )
+        )
+      );
+    }
+  };
+
   // Fetch or create chat and messages when contact is selected
   useEffect(() => {
-    if (!selectedContact || !user || !selectedContact.userId) return;
+    const selectedUserId = selectedContact?.userId ? String(selectedContact.userId) : '';
+    if (!selectedUserId || !user) return;
     setLoading(true);
     setError('');
     setInput('');
@@ -253,8 +382,8 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
     setChatStatus('ACTIVE');
     // Always use touristId first, guideId second
     const isTourist = user.role === 'tourist';
-    const touristId = isTourist ? (user.userId || user._id) : selectedContact.userId;
-    const guideId = isTourist ? selectedContact.userId : user.userId;
+    const touristId = isTourist ? (user.userId || user._id) : selectedUserId;
+    const guideId = isTourist ? selectedUserId : user.userId;
     api.get(`/chat/direct/${touristId}/${guideId}`)
       .then(res => {
         if (!res.data.chatId) {
@@ -263,14 +392,49 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
           return;
         }
         // Only allow chat if user is a participant
-        if (
-          (user.userId === touristId || user._id === touristId || user.userId === guideId || user._id === guideId)
-        ) {
-          setChatId(res.data.chatId);
-          setMessages(res.data.messages || []);
+        if (user.userId === touristId || user._id === touristId || user.userId === guideId || user._id === guideId) {
+          const resolvedChatId = res.data.chatId;
+          const resolvedMessages = res.data.messages || [];
+          const lastMessage = resolvedMessages.length ? resolvedMessages[resolvedMessages.length - 1] : null;
+
+          setChatId(resolvedChatId);
+          setMessages(resolvedMessages);
           setChatStatus(res.data.status || 'ACTIVE');
+          setContacts((prev) =>
+            sortContactsByLatest(
+              prev.map((item) =>
+                item.userId === selectedUserId
+                  ? {
+                      ...item,
+                      chatId: resolvedChatId,
+                      unreadCount: 0,
+                      lastMessage: lastMessage || item.lastMessage || null,
+                      lastMessageAt:
+                        lastMessage?.createdAt ||
+                        item.lastMessageAt ||
+                        item.lastMessage?.createdAt ||
+                        null,
+                      preview: buildMessagePreview(lastMessage) || item.preview || ''
+                    }
+                  : item
+              )
+            )
+          );
+          setSelectedContact((prev) =>
+            prev && prev.userId === selectedUserId
+              ? (prev.chatId === resolvedChatId && Number(prev.unreadCount || 0) === 0
+                  ? prev
+                  : {
+                      ...prev,
+                      chatId: resolvedChatId,
+                      unreadCount: 0
+                    })
+              : prev
+          );
           setLoading(false);
           setError('');
+          markChatAsRead(resolvedChatId, selectedUserId);
+          refreshContactsRef.current();
         } else {
           setLoading(false);
           setError('You are not allowed to access this chat.');
@@ -280,7 +444,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
         setLoading(false);
         setError('Failed to load chat.');
       });
-  }, [selectedContact, user]);
+  }, [selectedContact?.userId, user]);
 
   // Fetch chat status and messages when chatId changes
   // Only fetch for booking-based chats (not direct chats)
@@ -294,7 +458,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
     if (!socketRef.current) {
       socketRef.current = io(SOCKET_URL);
     }
-    const myUserId = user.userId || user._id;
+    const myUserId = String(user.userId || user._id || '');
     socketRef.current.emit('joinRoom', { chatId, userId: myUserId });
     socketRef.current.off('newMessage');
     socketRef.current.on('newMessage', (msg) => {
@@ -304,6 +468,33 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
         }
         return [...prev, msg];
       });
+
+      const incomingSenderId = resolveId(msg?.senderId);
+      const isIncoming = !!incomingSenderId && incomingSenderId !== myUserId;
+      const preview = buildMessagePreview(msg);
+
+      if (selectedContact?.userId) {
+        setContacts((prev) =>
+          sortContactsByLatest(
+            prev.map((item) =>
+              item.userId === selectedContact.userId
+                ? {
+                    ...item,
+                    chatId,
+                    lastMessage: msg,
+                    lastMessageAt: msg?.createdAt || new Date().toISOString(),
+                    preview: preview || item.preview || '',
+                    unreadCount: 0
+                  }
+                : item
+            )
+          )
+        );
+      }
+
+      if (isIncoming) {
+        markChatAsRead(chatId, selectedContact?.userId);
+      }
     });
     socketRef.current.off('messageDeleted');
     socketRef.current.on('messageDeleted', ({ messageId }) => {
@@ -323,6 +514,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
             : msg
         )
       );
+      refreshContactsRef.current();
     });
     return () => {
       if (socketRef.current) {
@@ -330,7 +522,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
         socketRef.current.off('messageDeleted');
       }
     };
-  }, [chatId, user]);
+  }, [chatId, user, selectedContact?.userId]);
 
   useEffect(() => {
     setSelectionMode(false);
@@ -375,11 +567,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
       attachmentType: attachment?.type || '',
       attachmentSize: attachment?.size || 0
     };
-    if (!selectedContact?.bookingId) {
-      await api.post(`/chat/direct/${touristId}/${guideId}/message`, payload);
-    } else {
-      await api.post(`/chat/${chatId}/message`, payload);
-    }
+    await api.post(`/chat/direct/${touristId}/${guideId}/message`, payload);
   };
 
   const handleSend = async () => {
@@ -391,6 +579,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
       await sendMessage({ content: input, messageType: 'TEXT' });
       // Do not update messages here; rely on socket event only
       setInput('');
+      refreshContactsRef.current();
     } catch (err) {
       alert(err.response?.data?.error || 'Message failed');
     }
@@ -414,6 +603,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
         messageType: isImage ? 'IMAGE' : 'FILE',
         attachment
       });
+      refreshContactsRef.current();
     } catch (err) {
       alert(err.response?.data?.error || 'Upload failed');
     } finally {
@@ -441,6 +631,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
             : msg
         )
       );
+      refreshContactsRef.current();
     } catch (err) {
       alert(err?.response?.data?.message || 'Unable to delete message.');
     }
@@ -451,6 +642,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
     try {
       await api.delete(`/chat/message/${messageId}/for-me`);
       setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+      refreshContactsRef.current();
     } catch (err) {
       alert(err?.response?.data?.message || 'Unable to delete message.');
     }
@@ -556,6 +748,7 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
       } else {
         applyDeleteForMe(successIds);
       }
+      refreshContactsRef.current();
     }
     if (successIds.length !== ids.length) {
       alert('Some messages could not be deleted.');
@@ -736,7 +929,14 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
                   }
                 }}
                 onClick={() => {
-                  setSelectedContact(contact);
+                  setSelectedContact({ ...contact, unreadCount: 0 });
+                  setContacts((prev) =>
+                    sortContactsByLatest(
+                      prev.map((item) =>
+                        item.userId === contact.userId ? { ...item, unreadCount: 0 } : item
+                      )
+                    )
+                  );
                   if (isMobile) setShowConversationList(false);
                 }}
               >
@@ -752,18 +952,49 @@ export default function ChatPanel({ chatTarget, onChatHandled }) {
                   }}
                 />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography fontWeight={700} fontSize={17} noWrap sx={{ color: '#10352c' }}>{contact.name || 'No Name'}</Typography>
-                  <Typography fontSize={13} sx={{ color: '#5d7d71' }} noWrap>{contact.subtitle || ''}</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'space-between' }}>
+                    <Typography fontWeight={700} fontSize={17} noWrap sx={{ color: '#10352c', maxWidth: '70%' }}>
+                      {contact.name || 'No Name'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>
+                      {formatConversationTime(contact.lastMessageAt || contact.lastMessage?.createdAt)}
+                    </Typography>
+                  </Box>
+                  <Typography fontSize={13} sx={{ color: '#5d7d71' }} noWrap>
+                    {contact.preview || contact.subtitle || 'Start a conversation'}
+                  </Typography>
                 </Box>
-                <Chip
-                  label={contact.type === 'hotel' ? 'Hotel' : 'Guide'}
-                  size="small"
-                  sx={{
-                    bgcolor: contact.type === 'hotel' ? 'rgba(14, 165, 233, 0.14)' : 'rgba(16, 185, 129, 0.14)',
-                    color: contact.type === 'hotel' ? '#0369a1' : '#047857',
-                    fontWeight: 700
-                  }}
-                />
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.8 }}>
+                  <Chip
+                    label={contact.type === 'hotel' ? 'Hotel' : 'Guide'}
+                    size="small"
+                    sx={{
+                      bgcolor: contact.type === 'hotel' ? 'rgba(14, 165, 233, 0.14)' : 'rgba(16, 185, 129, 0.14)',
+                      color: contact.type === 'hotel' ? '#0369a1' : '#047857',
+                      fontWeight: 700
+                    }}
+                  />
+                  {contact.unreadCount > 0 && (
+                    <Box
+                      sx={{
+                        minWidth: 22,
+                        height: 22,
+                        px: 0.7,
+                        borderRadius: '999px',
+                        bgcolor: '#0ea67f',
+                        color: '#ffffff',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 8px 14px rgba(14, 166, 127, 0.3)'
+                      }}
+                    >
+                      {contact.unreadCount > 99 ? '99+' : contact.unreadCount}
+                    </Box>
+                  )}
+                </Box>
               </Box>
             );
             })

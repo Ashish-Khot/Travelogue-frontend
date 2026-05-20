@@ -67,7 +67,125 @@ const resolveId = (value) => {
   return String(value);
 };
 
-export default function GuideChatPanel({ guideId, preselectedTouristId, preselectToken }) {
+const toTimestamp = (value) => {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const formatConversationTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    now.getFullYear() === date.getFullYear() &&
+    now.getMonth() === date.getMonth() &&
+    now.getDate() === date.getDate();
+
+  if (sameDay) {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const buildMessagePreview = (message) => {
+  if (!message) return '';
+  if (message.isDeleted) return 'Message deleted';
+  if (message.messageType === 'IMAGE') return message.content || message.attachmentName || 'Image';
+  if (message.messageType === 'FILE') return message.attachmentName || message.content || 'File';
+  return message.content || '';
+};
+
+const getTouristSortTime = (tourist) =>
+  toTimestamp(
+    tourist?.lastMessageAt ||
+      tourist?.lastMessage?.createdAt ||
+      tourist?.updatedAt
+  );
+
+const sortTouristsByLatest = (touristList = []) =>
+  [...touristList].sort((a, b) => {
+    const diff = getTouristSortTime(b) - getTouristSortTime(a);
+    if (diff !== 0) return diff;
+    return (a?.name || '').localeCompare(b?.name || '');
+  });
+
+const normalizeTouristEntry = (entry = {}) => {
+  const tourist = entry.tourist || entry;
+  const id = tourist?._id || tourist?.id || tourist?.userId;
+  if (!id) return null;
+
+  const avatar = tourist.avatar ? buildMediaUrl(tourist.avatar) : '';
+  const lastMessage = entry.lastMessage || tourist.lastMessage || null;
+  const lastMessageAt = entry.lastMessageAt || tourist.lastMessageAt || lastMessage?.createdAt || null;
+  const unreadCount = Math.max(0, Number(entry.unreadCount ?? tourist.unreadCount ?? 0));
+  const preview = entry.preview || tourist.preview || buildMessagePreview(lastMessage);
+
+  return {
+    ...tourist,
+    _id: String(id),
+    name: tourist.name || tourist.fullName || tourist.email || 'Tourist',
+    email: tourist.email || '',
+    avatar,
+    country: tourist.country || tourist.nationality || '',
+    chatId: entry.chatId || tourist.chatId || null,
+    bookingId: entry.bookingId || tourist.bookingId || null,
+    unreadCount,
+    lastMessage,
+    lastMessageAt,
+    preview
+  };
+};
+
+const mergeTourists = (current = [], incoming = []) => {
+  const byId = new Map();
+
+  current.forEach((item) => {
+    if (!item?._id) return;
+    byId.set(String(item._id), item);
+  });
+
+  incoming.forEach((item) => {
+    const normalized = normalizeTouristEntry(item);
+    if (!normalized?._id) return;
+    const touristId = String(normalized._id);
+    const existing = byId.get(touristId);
+
+    if (!existing) {
+      byId.set(touristId, normalized);
+      return;
+    }
+
+    const nextTime = getTouristSortTime(normalized);
+    const existingTime = getTouristSortTime(existing);
+    const useNextActivity = nextTime >= existingTime;
+
+    byId.set(touristId, {
+      ...existing,
+      ...normalized,
+      lastMessage: useNextActivity
+        ? normalized.lastMessage || existing.lastMessage || null
+        : existing.lastMessage || normalized.lastMessage || null,
+      lastMessageAt: useNextActivity
+        ? normalized.lastMessageAt || existing.lastMessageAt || null
+        : existing.lastMessageAt || normalized.lastMessageAt || null,
+      preview: useNextActivity
+        ? normalized.preview || existing.preview || ''
+        : existing.preview || normalized.preview || '',
+      unreadCount:
+        normalized.unreadCount !== undefined && normalized.unreadCount !== null
+          ? normalized.unreadCount
+          : existing.unreadCount || 0
+    });
+  });
+
+  return sortTouristsByLatest(Array.from(byId.values()));
+};
+
+export default function GuideChatPanel({ guideId, preselectedTouristId, preselectToken, onTouristsChange = () => {} }) {
   const [tourists, setTourists] = useState([]);
   const [filteredTourists, setFilteredTourists] = useState([]);
   const [search, setSearch] = useState('');
@@ -115,55 +233,84 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const lastAppliedPreselectTokenRef = useRef(null);
+  const refreshTouristsRef = useRef(async () => {});
 
-  // Fetch only tourists who have booked this guide.
+  useEffect(() => {
+    onTouristsChange(tourists);
+  }, [tourists, onTouristsChange]);
+
+  // Fetch tourists linked to this guide and keep summaries fresh.
   useEffect(() => {
     if (!guideId) return;
-    setLoading(true);
-    setError('');
-    api.get(`/chat/guide/${guideId}/tourists`).then(res => {
-      const touristsList = (res.data.tourists || [])
-        .map((item) => {
-          const tourist = item.tourist || item;
-          const id = tourist?._id || tourist?.id || tourist?.userId;
-          if (!id) return null;
-          return {
-            ...tourist,
-            _id: String(id),
-            name: tourist.name || tourist.fullName || tourist.email || 'Tourist',
-            email: tourist.email || '',
-            avatar: tourist.avatar || '',
-            country: tourist.country || tourist.nationality || '',
-            chatId: item.chatId || tourist.chatId || null,
-            bookingId: item.bookingId || tourist.bookingId || null,
-            unreadCount: item.unreadCount || tourist.unreadCount || 0,
-            lastMessage: item.lastMessage || tourist.lastMessage || null,
-          };
-        })
-        .filter(Boolean);
-      setTourists(touristsList);
-      setFilteredTourists(touristsList);
-      setLoading(false);
-    }).catch(() => {
-      setLoading(false);
-      setError('Failed to load tourists.');
-    });
+    let isMounted = true;
+
+    const loadTourists = async (withLoading = false) => {
+      if (withLoading) {
+        setLoading(true);
+      }
+      try {
+        const res = await api.get(`/chat/guide/${guideId}/tourists`);
+        if (!isMounted) return;
+        const touristsList = (res.data.tourists || [])
+          .map((item) => normalizeTouristEntry(item))
+          .filter(Boolean);
+        setTourists((prev) => mergeTourists(prev, touristsList));
+        setError('');
+      } catch (err) {
+        if (!isMounted) return;
+        setError('Failed to load tourists.');
+      } finally {
+        if (isMounted && withLoading) {
+          setLoading(false);
+        }
+      }
+    };
+
+    refreshTouristsRef.current = async () => {
+      await loadTourists(false);
+    };
+
+    loadTourists(true);
+    const interval = setInterval(() => {
+      refreshTouristsRef.current();
+    }, 12000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [guideId]);
 
   // Filter tourists by search
   useEffect(() => {
-    if (!search) {
-      setFilteredTourists(tourists);
-    } else {
-      setFilteredTourists(
-        tourists.filter(t =>
-          t.name?.toLowerCase().includes(search.toLowerCase()) ||
-          t.email?.toLowerCase().includes(search.toLowerCase()) ||
-          t.country?.toLowerCase().includes(search.toLowerCase())
-        )
-      );
-    }
+    const query = search.trim().toLowerCase();
+    const next = sortTouristsByLatest(
+      tourists.filter((t) =>
+        !query ||
+        t.name?.toLowerCase().includes(query) ||
+        t.email?.toLowerCase().includes(query) ||
+        t.country?.toLowerCase().includes(query) ||
+        t.preview?.toLowerCase().includes(query)
+      )
+    );
+    setFilteredTourists(next);
   }, [search, tourists]);
+
+  useEffect(() => {
+    if (!selectedTourist?._id) return;
+    const latest = tourists.find((tourist) => tourist._id === selectedTourist._id);
+    if (!latest) return;
+    setSelectedTourist((prev) => {
+      if (!prev || prev._id !== latest._id) return prev;
+      const shouldUpdate =
+        prev.name !== latest.name ||
+        prev.avatar !== latest.avatar ||
+        prev.country !== latest.country ||
+        prev.unreadCount !== latest.unreadCount ||
+        prev.chatId !== latest.chatId;
+      return shouldUpdate ? { ...prev, ...latest } : prev;
+    });
+  }, [tourists, selectedTourist?._id]);
 
   useEffect(() => {
     if (tourists.length === 0) {
@@ -190,28 +337,76 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
     if (!selectedTourist || !tourists.some((tourist) => tourist._id === selectedTourist._id)) {
       setSelectedTourist(tourists[0]);
     }
-  }, [tourists, selectedTourist, preselectedTouristId, preselectToken]);
+  }, [tourists, selectedTourist?._id, preselectedTouristId, preselectToken]);
+
+  const markChatAsRead = async (activeChatId, touristId) => {
+    if (!activeChatId) return;
+    try {
+      await api.post(`/chat/${activeChatId}/read`);
+    } catch (err) {
+      // keep UI responsive even if mark-as-read fails
+    }
+
+    const normalizedTouristId = touristId ? String(touristId) : '';
+    if (!normalizedTouristId) return;
+
+    setTourists((prev) =>
+      sortTouristsByLatest(
+        prev.map((tourist) =>
+          tourist._id === normalizedTouristId
+            ? { ...tourist, unreadCount: 0, chatId: activeChatId }
+            : tourist
+        )
+      )
+    );
+  };
 
   // Fetch or create chat and messages when tourist is selected
   useEffect(() => {
-    if (!selectedTourist || !guideId) return;
+    const selectedTouristId = selectedTourist?._id ? String(selectedTourist._id) : '';
+    if (!selectedTouristId || !guideId) return;
     setLoading(true);
     setError('');
     setMessages([]);
     setChatId(null);
-    api.get(`/chat/direct/${selectedTourist._id}/${guideId}`)
+    api.get(`/chat/direct/${selectedTouristId}/${guideId}`)
       .then(res => {
-        setChatId(res.data.chatId);
-        setMessages(res.data.messages || []);
+        const resolvedChatId = res.data.chatId;
+        const resolvedMessages = res.data.messages || [];
+        const lastMessage = resolvedMessages.length ? resolvedMessages[resolvedMessages.length - 1] : null;
+
+        setChatId(resolvedChatId);
+        setMessages(resolvedMessages);
         setChatStatus(res.data.status || 'ACTIVE');
+        setTourists((prev) =>
+          sortTouristsByLatest(
+            prev.map((tourist) =>
+              tourist._id === selectedTouristId
+                ? {
+                    ...tourist,
+                    chatId: resolvedChatId,
+                    unreadCount: 0,
+                    lastMessage: lastMessage || tourist.lastMessage || null,
+                    lastMessageAt:
+                      lastMessage?.createdAt ||
+                      tourist.lastMessageAt ||
+                      tourist.lastMessage?.createdAt ||
+                      null,
+                    preview: buildMessagePreview(lastMessage) || tourist.preview || ''
+                  }
+                : tourist
+            )
+          )
+        );
         setLoading(false);
+        markChatAsRead(resolvedChatId, selectedTouristId);
+        refreshTouristsRef.current();
       })
-      .catch((err) => {
-        // Only show error if it's a real API/server error, not just no chat yet
+      .catch(() => {
         setLoading(false);
         setError('Failed to load chat.');
       });
-  }, [selectedTourist, guideId]);
+  }, [selectedTourist?._id, guideId]);
 
   // Socket.io setup for chat
   useEffect(() => {
@@ -219,13 +414,42 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
     if (!socketRef.current) {
       socketRef.current = io(SOCKET_URL);
     }
-    socketRef.current.emit('joinRoom', { chatId, userId: guideId });
+    const myGuideId = String(guideId);
+    socketRef.current.emit('joinRoom', { chatId, userId: myGuideId });
     socketRef.current.off('newMessage');
     socketRef.current.on('newMessage', (msg) => {
       setMessages(prev => {
         if (msg?._id && prev.some(item => item._id === msg._id)) return prev;
         return [...prev, msg];
       });
+
+      const activeTouristId = selectedTourist?._id ? String(selectedTourist._id) : '';
+      const senderId = resolveId(msg?.senderId);
+      const isIncoming = !!senderId && senderId !== myGuideId;
+      const preview = buildMessagePreview(msg);
+
+      if (activeTouristId) {
+        setTourists((prev) =>
+          sortTouristsByLatest(
+            prev.map((tourist) =>
+              tourist._id === activeTouristId
+                ? {
+                    ...tourist,
+                    chatId,
+                    lastMessage: msg,
+                    lastMessageAt: msg?.createdAt || new Date().toISOString(),
+                    preview: preview || tourist.preview || '',
+                    unreadCount: 0
+                  }
+                : tourist
+            )
+          )
+        );
+      }
+
+      if (isIncoming) {
+        markChatAsRead(chatId, activeTouristId);
+      }
     });
     socketRef.current.off('messageDeleted');
     socketRef.current.on('messageDeleted', ({ messageId }) => {
@@ -245,6 +469,7 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
             : msg
         )
       );
+      refreshTouristsRef.current();
     });
     return () => {
       if (socketRef.current) {
@@ -252,7 +477,7 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
         socketRef.current.off('messageDeleted');
       }
     };
-  }, [chatId, guideId]);
+  }, [chatId, guideId, selectedTourist?._id]);
 
   useEffect(() => {
     setSelectionMode(false);
@@ -320,6 +545,7 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
       await postMessage({ content: input.trim(), messageType: 'TEXT' });
       // Do not update messages here; rely on socket event only
       setInput('');
+      refreshTouristsRef.current();
     } catch (err) {
       alert(err.response?.data?.error || 'Message failed');
     }
@@ -345,6 +571,7 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
         messageType: isImage ? 'IMAGE' : 'FILE',
         attachment,
       });
+      refreshTouristsRef.current();
     } catch (err) {
       alert(err.response?.data?.error || 'Upload failed');
     } finally {
@@ -432,6 +659,7 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
       } else {
         applyDeleteForMe(successIds);
       }
+      refreshTouristsRef.current();
     }
     if (successIds.length !== ids.length) {
       alert('Some messages could not be deleted.');
@@ -508,13 +736,29 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
                 transition: 'background 0.2s',
                 '&:hover': { bgcolor: '#f0f7f4' }
               }}
-              onClick={() => setSelectedTourist(tourist)}
+              onClick={() => {
+                setSelectedTourist({ ...tourist, unreadCount: 0 });
+                setTourists((prev) =>
+                  sortTouristsByLatest(
+                    prev.map((item) =>
+                      item._id === tourist._id ? { ...item, unreadCount: 0 } : item
+                    )
+                  )
+                );
+              }}
               role="button"
               tabIndex={0}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  setSelectedTourist(tourist);
+                  setSelectedTourist({ ...tourist, unreadCount: 0 });
+                  setTourists((prev) =>
+                    sortTouristsByLatest(
+                      prev.map((item) =>
+                        item._id === tourist._id ? { ...item, unreadCount: 0 } : item
+                      )
+                    )
+                  );
                 }
               }}
             >
@@ -524,10 +768,39 @@ export default function GuideChatPanel({ guideId, preselectedTouristId, preselec
                 size={44}
                 sx={{ border: selectedTourist?._id === tourist._id ? '2px solid #388e3c' : '2px solid #fff' }}
               />
-              <Box>
-                <Typography fontWeight={700} fontSize={{ xs: 15, md: 17 }}>{tourist.name || 'No Name'}</Typography>
-                <Typography fontSize={13} color="text.secondary">{tourist.country || ''}</Typography>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                  <Typography fontWeight={700} fontSize={{ xs: 15, md: 17 }} noWrap sx={{ maxWidth: '68%' }}>
+                    {tourist.name || 'No Name'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    {formatConversationTime(tourist.lastMessageAt || tourist.lastMessage?.createdAt)}
+                  </Typography>
+                </Box>
+                <Typography fontSize={13} color="text.secondary" noWrap>
+                  {tourist.preview || tourist.country || 'Start conversation'}
+                </Typography>
               </Box>
+              {tourist.unreadCount > 0 && (
+                <Box
+                  sx={{
+                    minWidth: 22,
+                    height: 22,
+                    px: 0.7,
+                    borderRadius: '999px',
+                    bgcolor: '#2e7d32',
+                    color: '#fff',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 8px 14px rgba(46, 125, 50, 0.3)'
+                  }}
+                >
+                  {tourist.unreadCount > 99 ? '99+' : tourist.unreadCount}
+                </Box>
+              )}
             </Box>
           ))}
         </Box>

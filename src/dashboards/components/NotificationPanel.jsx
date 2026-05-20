@@ -58,8 +58,18 @@ export default function NotificationPanel({ onActionComplete, chatNotifications 
     setAnchorEl(null);
   };
 
-  // Calculate total notification count (tour notifications + chat notifications)
-  const totalNotificationCount = notifications.length + Object.keys(chatNotifications).length;
+  const chatNotificationEntries = Object.entries(chatNotifications).sort(([, a], [, b]) => {
+    const aTime = Number(a?.timestamp || 0);
+    const bTime = Number(b?.timestamp || 0);
+    return bTime - aTime;
+  });
+  const chatUnreadCount = chatNotificationEntries.reduce(
+    (sum, [, notif]) => sum + Number(notif?.unreadCount || 0),
+    0
+  );
+
+  // Calculate total notification count (tour notifications + chat unread messages)
+  const totalNotificationCount = notifications.length + chatUnreadCount;
 
   const handleReplyClick = (notif, action) => {
     setSelectedNotif({ ...notif, action });
@@ -192,12 +202,12 @@ export default function NotificationPanel({ onActionComplete, chatNotifications 
             ) : (
               <>
                 {/* Chat Notifications Section */}
-                {Object.keys(chatNotifications).length > 0 && (
+                {chatNotificationEntries.length > 0 && (
                   <>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ px: 0.5, mt: 1 }}>
                       💬 MESSAGES
                     </Typography>
-                    {Object.entries(chatNotifications).map(([guideId, notif], index) => (
+                    {chatNotificationEntries.map(([guideId, notif]) => (
                       <Box key={`chat-${guideId}`}>
                         <Paper 
                           onClick={() => {

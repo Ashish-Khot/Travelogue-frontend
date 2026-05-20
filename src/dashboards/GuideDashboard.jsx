@@ -1,24 +1,24 @@
 // Real Earnings Page with Charts
 function EarningsPage({ bookings }) {
   const [loading, setLoading] = React.useState(false);
-  
+
   // Calculate earnings metrics
   const totalEarnings = bookings
     .filter(b => b.status === 'confirmed' || b.status === 'completed')
     .reduce((sum, b) => sum + (b.price || 0), 0);
-  
+
   const thisMonth = bookings.filter(b => {
     const bookingMonth = new Date(b.startDateTime).getMonth();
     const currentMonth = new Date().getMonth();
     return bookingMonth === currentMonth && (b.status === 'confirmed' || b.status === 'completed');
   }).reduce((sum, b) => sum + (b.price || 0), 0);
-  
+
   const pendingPayments = bookings
     .filter(b => b.status === 'pending' || b.status === 'confirmed')
     .reduce((sum, b) => sum + (b.price || 0), 0);
-  
+
   const completedBookings = bookings.filter(b => b.status === 'completed').length;
-  
+
   // Earnings by tour (destination)
   const earningsByDest = {};
   bookings
@@ -27,7 +27,7 @@ function EarningsPage({ bookings }) {
       const dest = b.destination || 'Other';
       earningsByDest[dest] = (earningsByDest[dest] || 0) + (b.price || 0);
     });
-  
+
   // Daily earnings for last 7 days
   const dailyEarnings = {};
   for (let i = 6; i >= 0; i--) {
@@ -36,7 +36,7 @@ function EarningsPage({ bookings }) {
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     dailyEarnings[dateStr] = 0;
   }
-  
+
   bookings
     .filter(b => b.status === 'confirmed' || b.status === 'completed')
     .forEach(b => {
@@ -52,7 +52,7 @@ function EarningsPage({ bookings }) {
   return (
     <Box>
       <Typography variant="h5" fontWeight={700} mb={3}>💰 Earnings & Revenue</Typography>
-      
+
       {/* Key Metrics */}
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, mb: 4 }}>
         <Box sx={{ p: 3, bgcolor: '#fff', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
@@ -62,7 +62,7 @@ function EarningsPage({ bookings }) {
             📈 {completedBookings} completed tours
           </Typography>
         </Box>
-        
+
         <Box sx={{ p: 3, bgcolor: '#fff', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
           <Typography variant="subtitle2" color="text.secondary" fontWeight={600} mb={1}>THIS MONTH</Typography>
           <Typography variant="h4" fontWeight={800} sx={{ color: '#10b981' }}>₹{thisMonth.toFixed(2)}</Typography>
@@ -70,7 +70,7 @@ function EarningsPage({ bookings }) {
             📅 {bookings.filter(b => new Date(b.startDateTime).getMonth() === new Date().getMonth()).length} bookings
           </Typography>
         </Box>
-        
+
         <Box sx={{ p: 3, bgcolor: '#fff', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
           <Typography variant="subtitle2" color="text.secondary" fontWeight={600} mb={1}>PENDING PAYMENTS</Typography>
           <Typography variant="h4" fontWeight={800} sx={{ color: '#f59e0b' }}>₹{pendingPayments.toFixed(2)}</Typography>
@@ -78,7 +78,7 @@ function EarningsPage({ bookings }) {
             ⏳ {bookings.filter(b => b.status === 'pending' || b.status === 'confirmed').length} bookings
           </Typography>
         </Box>
-        
+
         <Box sx={{ p: 3, bgcolor: '#fff', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
           <Typography variant="subtitle2" color="text.secondary" fontWeight={600} mb={1}>AVG PER BOOKING</Typography>
           <Typography variant="h4" fontWeight={800} sx={{ color: '#8b5cf6' }}>
@@ -208,14 +208,14 @@ function ReviewsPage({ user, guideProfile }) {
           console.log('Could not fetch reviews:', err);
           reviewsData = [];
         }
-        
+
         setReviews(reviewsData);
-        
+
         // Calculate average rating and distribution
         if (reviewsData.length > 0) {
           const avg = reviewsData.reduce((sum, r) => sum + r.rating, 0) / reviewsData.length;
           setAverageRating(avg);
-          
+
           const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
           reviewsData.forEach(r => {
             if (dist.hasOwnProperty(r.rating)) {
@@ -233,7 +233,7 @@ function ReviewsPage({ user, guideProfile }) {
         setLoading(false);
       }
     };
-    
+
     if (user?._id) fetchReviews();
   }, [user, guideProfile]);
 
@@ -251,14 +251,14 @@ function ReviewsPage({ user, guideProfile }) {
     setSavingReply(true);
     try {
       const res = await api.put(`/review/${replyingTo}/reply`, { guideReply: replyText });
-      
+
       // Update review in state
-      setReviews(reviews.map(r => 
-        r._id === replyingTo 
+      setReviews(reviews.map(r =>
+        r._id === replyingTo
           ? { ...r, guideReply: res.data.review.guideReply, guideReplyDate: res.data.review.guideReplyDate }
           : r
       ));
-      
+
       setReplyingTo(null);
       setReplyText('');
     } catch (err) {
@@ -278,7 +278,7 @@ function ReviewsPage({ user, guideProfile }) {
   return (
     <Box>
       <Typography variant="h5" fontWeight={700} mb={3}>⭐ Reviews & Ratings</Typography>
-      
+
       {/* Rating Summary */}
       <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', md: '300px 1fr' }, mb: 4 }}>
         {/* Overall Rating Card */}
@@ -359,7 +359,7 @@ function ReviewsPage({ user, guideProfile }) {
                     </Typography>
                   </Box>
                 </Box>
-                
+
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6, pl: 0 }}>
                   {review.comment || 'No comment provided'}
                 </Typography>
@@ -416,7 +416,7 @@ function ReviewsPage({ user, guideProfile }) {
                       size="small"
                       variant={review.guideReply ? "outlined" : "contained"}
                       onClick={() => handleReplyClick(review)}
-                      sx={{ 
+                      sx={{
                         bgcolor: review.guideReply ? 'transparent' : '#dbeafe',
                         color: review.guideReply ? '#1e40af' : '#1e40af',
                         border: '1px solid #bfdbfe',
@@ -478,6 +478,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
+import Badge from '@mui/material/Badge';
 import { buildMediaUrl } from '../utils/media';
 
 const drawerWidth = 272;
@@ -646,13 +647,13 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
   const upcomingTours = bookings.filter(b => new Date(b.startDateTime) > new Date()).length;
   const completedTours = bookings.filter(b => b.status === 'completed').length;
   const totalEarnings = bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').reduce((sum, b) => sum + (b.price || 0), 0);
-  
+
   const thisMonthBookings = bookings.filter(b => {
     const bookingMonth = new Date(b.startDateTime).getMonth();
     const currentMonth = new Date().getMonth();
     return bookingMonth === currentMonth && (b.status === 'confirmed' || b.status === 'completed');
   }).length;
-  
+
   const responseRate = totalBookings > 0 ? 95 : 0; // Placeholder, should come from backend
   const completionRate = totalBookings > 0 ? Math.round((completedTours / totalBookings) * 100) : 0;
   const activeBookings = bookings.filter(b => ['pending', 'confirmed'].includes((b.status || '').toLowerCase())).length;
@@ -985,12 +986,12 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Chip 
+              <Chip
                 label="Currency: INR"
                 size="small"
                 sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
               />
-              <Chip 
+              <Chip
                 label={`${guideProfile?.rateType === 'hourly' ? 'Hourly' : 'Daily'} Rate`}
                 size="small"
                 sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
@@ -1063,7 +1064,7 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
 function TourCard({ tour, onEdit, onDelete }) {
   const bookingCount = tour.bookings?.length || 0;
   const revenue = tour.bookings?.reduce((sum, b) => sum + (b.price || 0), 0) || 0;
-  
+
   return (
     <Box
       sx={{
@@ -1386,9 +1387,9 @@ const CalendarPage = () => (
 import GuideChatPanel from './components/GuideChatPanel';
 
 // Placeholder for MessagesPage
-function MessagesPage({ user, preselectedTouristId, preselectToken }) {
+function MessagesPage({ user, preselectedTouristId, preselectToken, onTouristsChange }) {
   return user
-    ? <GuideChatPanel guideId={user._id} preselectedTouristId={preselectedTouristId} preselectToken={preselectToken} />
+    ? <GuideChatPanel guideId={user._id} preselectedTouristId={preselectedTouristId} preselectToken={preselectToken} onTouristsChange={onTouristsChange} />
     : null;
 }
 
@@ -1403,11 +1404,12 @@ export default function GuideDashboard() {
   const [tours, setTours] = useState([]);
   const [selected, setSelected] = useState('Dashboard');
   const [chatOpenRequest, setChatOpenRequest] = useState({ touristId: '', token: 0 });
+  const [guideChatUnreadCount, setGuideChatUnreadCount] = useState(0);
   const [open, setOpen] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const socketRef = useRef(null);
-// ...existing code...
+  // ...existing code...
 
   useEffect(() => {
     if (!isMobile) {
@@ -1512,10 +1514,10 @@ export default function GuideDashboard() {
       socketRef.current = io(SOCKET_BASE_URL);
     }
     const socket = socketRef.current;
-    
+
     // Emit guide online status
     socket.emit('guideOnline', { guideId: userObj._id });
-    
+
     // Join guide room for real-time updates
     socket.emit('joinGuideRoom', { guideId: userObj._id });
     // Listen for booking updates
@@ -1534,6 +1536,35 @@ export default function GuideDashboard() {
       }
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (!user?._id) return;
+    let isMounted = true;
+
+    const syncUnreadMessages = async () => {
+      try {
+        const response = await api.get(`/chat/guide/${user._id}/tourists`);
+        if (!isMounted) return;
+        const tourists = response?.data?.tourists || [];
+        const totalUnread = tourists.reduce((sum, item) => {
+          const unread = Number(item?.unreadCount ?? item?.tourist?.unreadCount ?? 0);
+          return sum + (Number.isFinite(unread) ? Math.max(0, unread) : 0);
+        }, 0);
+        setGuideChatUnreadCount(totalUnread);
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('Unable to sync guide unread count:', err.response?.data?.message || err.message);
+      }
+    };
+
+    syncUnreadMessages();
+    const interval = setInterval(syncUnreadMessages, 15000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user?._id]);
 
   // ProfilePage now uses guideProfile
   const ProfilePage = () => {
@@ -1583,9 +1614,9 @@ export default function GuideDashboard() {
         ? guideProfile.userId
         : {};
       const avatar = profileUser?.avatar || guideProfile?.avatar || user?.avatar || '';
-      
+
       const languageName = getLanguagesText(guideProfile?.languages) || guideProfile?.language || '';
-      
+
       setForm({
         name: profileUser?.name || guideProfile?.name || user?.name || '',
         email: profileUser?.email || guideProfile?.email || user?.email || '',
@@ -1705,12 +1736,12 @@ export default function GuideDashboard() {
           .split(/[\n,]+/)
           .map((language) => language.trim())
           .filter(Boolean);
-        
+
         if (selectedLanguages.length === 0) {
           setErrorMsg('Please enter at least one language');
           return;
         }
-        
+
         const payload = {
           name: form.name,
           bio: form.bio,
@@ -2109,7 +2140,7 @@ export default function GuideDashboard() {
       <Box sx={{ maxWidth: 600 }}>
         <Box sx={{ p: 4, bgcolor: '#fff', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0', mb: 3 }}>
           <Typography variant="subtitle1" fontWeight={700} mb={3}>Account Settings</Typography>
-          
+
           <Box mb={3}>
             <Typography variant="subtitle2" fontWeight={600} mb={1}>Notifications</Typography>
             <Typography variant="body2" color="text.secondary">Manage how we communicate with you</Typography>
@@ -2180,12 +2211,17 @@ export default function GuideDashboard() {
     }
   };
 
+  const handleGuideTouristsChange = (tourists = []) => {
+    const totalUnread = tourists.reduce((sum, tourist) => sum + Number(tourist?.unreadCount || 0), 0);
+    setGuideChatUnreadCount(totalUnread);
+  };
+
   const pageMap = {
     Dashboard: <DashboardPage user={user} bookings={bookings} guideProfile={guideProfile} guideReviews={guideReviews} tours={tours} />,
     'My Tours': <MyToursPage tours={tours} onCreateTour={handleCreateTour} />,
     Bookings: <BookingsPage bookings={bookings} refreshBookings={fetchGuideData} onOpenChat={handleOpenChatFromBooking} />,
     Calendar: <CalendarPage />,
-    Messages: <MessagesPage user={user} preselectedTouristId={chatOpenRequest.touristId} preselectToken={chatOpenRequest.token} />,
+    Messages: <MessagesPage user={user} preselectedTouristId={chatOpenRequest.touristId} preselectToken={chatOpenRequest.token} onTouristsChange={handleGuideTouristsChange} />,
     Earnings: <EarningsPage bookings={bookings} />,
     Reviews: <ReviewsPage user={user} guideProfile={guideProfile} />,
     Profile: <ProfilePage />,
@@ -2255,7 +2291,13 @@ export default function GuideDashboard() {
               onClick={() => handleSectionSelect(item.label)}
             >
               <ListItemIcon sx={{ minWidth: 0, mr: drawerExpanded ? 2 : 'auto', justifyContent: 'center', color: 'inherit' }}>
-                {item.icon}
+                {item.label === 'Messages' ? (
+                  <Badge color="error" badgeContent={guideChatUnreadCount} overlap="circular">
+                    {item.icon}
+                  </Badge>
+                ) : (
+                  item.icon
+                )}
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
