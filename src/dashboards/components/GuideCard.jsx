@@ -56,17 +56,25 @@ export default function GuideCard({
   })();
   const coverKind = getMediaKind(coverMedia);
   const coverSrc = coverMedia?.url || guide.avatar;
+  const serviceDestinations = Array.isArray(guide.serviceDestinations)
+    ? guide.serviceDestinations.filter((item) => item?.destination)
+    : [];
+  const hasLocalDestinations = serviceDestinations.length > 0;
   const isAvailable = guide.isAvailable !== false;
-  const isBookable = guide.manualAvailability !== false;
+  const isBookable = guide.manualAvailability !== false && hasLocalDestinations;
   const availabilityReason = guide.availabilityReason || (isAvailable ? 'available_now' : 'unavailable');
-  const availabilityLabel = availabilityReason === 'booked_now'
+  const availabilityLabel = !hasLocalDestinations
+    ? 'Destinations Pending'
+    : availabilityReason === 'booked_now'
     ? 'Booked Now'
     : availabilityReason === 'manual_offline'
       ? 'Unavailable'
       : isAvailable
         ? 'Available'
         : 'Unavailable';
-  const availabilityBg = availabilityReason === 'booked_now'
+  const availabilityBg = !hasLocalDestinations
+    ? 'rgba(71, 85, 105, 0.95)'
+    : availabilityReason === 'booked_now'
     ? 'rgba(245, 158, 11, 0.95)'
     : isAvailable
       ? 'rgba(16, 185, 129, 0.95)'
@@ -303,6 +311,40 @@ export default function GuideCard({
             </Typography>
           )}
 
+          {serviceDestinations.length > 0 && (
+            <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              {serviceDestinations.slice(0, 2).map((item, idx) => (
+                <Chip
+                  key={`${item.destination}-${idx}`}
+                  label={`${item.destination} · INR ${Number(item.price || 0)}`}
+                  size="small"
+                  sx={{
+                    height: 23,
+                    bgcolor: '#fff7ed',
+                    color: '#9a3412',
+                    border: '1px solid #fed7aa',
+                    fontWeight: 700,
+                    fontSize: '0.68rem'
+                  }}
+                />
+              ))}
+              {serviceDestinations.length > 2 && (
+                <Chip
+                  label={`+${serviceDestinations.length - 2} more`}
+                  size="small"
+                  sx={{
+                    height: 23,
+                    bgcolor: '#f8fafc',
+                    color: '#475569',
+                    border: '1px solid #cbd5e1',
+                    fontWeight: 700,
+                    fontSize: '0.68rem'
+                  }}
+                />
+              )}
+            </Stack>
+          )}
+
           <Stack direction="row" spacing={0.8} useFlexGap sx={{ flexWrap: 'wrap' }}>
             {Array.isArray(guide.tourTypes) && guide.tourTypes.slice(0, 2).map((type, idx) => (
               <Chip
@@ -379,7 +421,7 @@ export default function GuideCard({
                 },
               }}
             >
-              {isBookable ? 'Book Guide' : 'Unavailable'}
+              {isBookable ? 'Book Guide' : hasLocalDestinations ? 'Unavailable' : 'Setup Pending'}
             </Button>
             <Button
               variant="outlined"

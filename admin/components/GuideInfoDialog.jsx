@@ -1,5 +1,6 @@
 import React from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Chip, Box, CircularProgress } from '@mui/material';
+import api from '../../src/api';
 import { toAbsoluteAssetUrl } from '../../src/config/runtime';
 
 const getUploadUrl = (path = '') => {
@@ -11,6 +12,7 @@ const getUploadUrl = (path = '') => {
 const isImageProof = (path = '') => /\.(png|jpe?g|webp|gif)$/i.test(path.split('?')[0]);
 
 export default function GuideInfoDialog({ open, onClose, guide, loading, onApprove, onReject, approving, rejecting, isGuide }) {
+  const [openingProof, setOpeningProof] = React.useState(false);
   const languageText = Array.isArray(guide?.languages)
     ? guide.languages
         .map((language) => (typeof language === 'string' ? language : language?.name))
@@ -20,6 +22,40 @@ export default function GuideInfoDialog({ open, onClose, guide, loading, onAppro
   const identityProof = guide?.identityProof || guide?.identityProofUrl || '';
   const identityProofUrl = getUploadUrl(identityProof);
   const hasImageProof = isImageProof(identityProof);
+
+  const handleOpenIdentityProof = async () => {
+    const fallbackUrl = identityProofUrl;
+    const guideId = String(guide?._id || '');
+
+    if (!guideId) {
+      if (fallbackUrl) {
+        window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      window.alert('Identity proof is not available.');
+      return;
+    }
+
+    if (openingProof) return;
+    setOpeningProof(true);
+    try {
+      const res = await api.get(`/adminGuide/identity-proof-url/${guideId}`);
+      const proofUrl = String(res?.data?.url || '').trim() || fallbackUrl;
+      if (!proofUrl) {
+        window.alert('Identity proof is not available.');
+        return;
+      }
+      window.open(proofUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      if (fallbackUrl) {
+        window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        window.alert(err?.response?.data?.message || 'Failed to open identity proof.');
+      }
+    } finally {
+      setOpeningProof(false);
+    }
+  };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -90,14 +126,13 @@ export default function GuideInfoDialog({ open, onClose, guide, loading, onAppro
                         </Box>
                       )}
                       <Button
-                        href={identityProofUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={handleOpenIdentityProof}
                         size="small"
                         variant="outlined"
+                        disabled={openingProof}
                         sx={{ textTransform: 'none', mt: 1 }}
                       >
-                        Open identity proof
+                        {openingProof ? 'Opening...' : 'Open identity proof'}
                       </Button>
                     </Box>
                   ) : (

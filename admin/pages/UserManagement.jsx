@@ -70,6 +70,41 @@ export default function UserManagement() {
   const [guideLoading, setGuideLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [openingProofGuideId, setOpeningProofGuideId] = useState('');
+
+  const handleOpenGuideProof = async (guideId, fallbackProofPath = '') => {
+    const normalizedGuideId = String(guideId || '').trim();
+    const fallbackUrl = getUploadUrl(fallbackProofPath);
+
+    if (!normalizedGuideId) {
+      if (fallbackUrl) {
+        window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('Identity proof is not available.');
+      return;
+    }
+
+    if (openingProofGuideId === normalizedGuideId) return;
+    setOpeningProofGuideId(normalizedGuideId);
+    try {
+      const res = await api.get(`/adminGuide/identity-proof-url/${normalizedGuideId}`);
+      const proofUrl = String(res?.data?.url || '').trim() || fallbackUrl;
+      if (!proofUrl) {
+        alert('Identity proof is not available.');
+        return;
+      }
+      window.open(proofUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      if (fallbackUrl) {
+        window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        alert(err?.response?.data?.message || 'Failed to open identity proof.');
+      }
+    } finally {
+      setOpeningProofGuideId('');
+    }
+  };
 
   const handleEditUser = async (user) => {
     setSelectedUser(user);
@@ -253,6 +288,8 @@ export default function UserManagement() {
                     const roleColor = roleColors[user.role] || { bg: '#f3f4f6', fg: '#374151' };
                     const statusColor = statusColors[user.status] || { bg: '#f3f4f6', fg: '#374151' };
                     const proofUrl = getUploadUrl(user.guideIdentityProof);
+                    const guideIdText = String(user.guideId || '');
+                    const isProofOpening = openingProofGuideId === guideIdText;
                     return (
                       <TableRow key={user._id || idx} hover sx={{ '& td': { py: 1.4, fontSize: '13px' } }}>
                         <TableCell sx={{ fontWeight: 600 }}>{user.name}</TableCell>
@@ -263,14 +300,13 @@ export default function UserManagement() {
                           {user.role === 'guide' ? (
                             proofUrl ? (
                               <Button
-                                href={proofUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                onClick={() => handleOpenGuideProof(user.guideId, user.guideIdentityProof)}
                                 size="small"
                                 variant="outlined"
+                                disabled={isProofOpening}
                                 sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.72rem', py: 0.25 }}
                               >
-                                View proof
+                                {isProofOpening ? 'Opening...' : 'View proof'}
                               </Button>
                             ) : (
                               <Chip label="Missing" size="small" color="warning" variant="outlined" sx={{ borderRadius: '8px', fontWeight: 600 }} />
@@ -305,6 +341,8 @@ export default function UserManagement() {
                 const roleColor = roleColors[user.role] || { bg: '#f3f4f6', fg: '#374151' };
                 const statusColor = statusColors[user.status] || { bg: '#f3f4f6', fg: '#374151' };
                 const proofUrl = getUploadUrl(user.guideIdentityProof);
+                const guideIdText = String(user.guideId || '');
+                const isProofOpening = openingProofGuideId === guideIdText;
                 return (
                   <Paper key={user._id || idx} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 1.35 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
@@ -323,15 +361,13 @@ export default function UserManagement() {
                       {user.role === 'guide' && (
                         proofUrl ? (
                           <Chip
-                            component="a"
-                            href={proofUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            onClick={() => handleOpenGuideProof(user.guideId, user.guideIdentityProof)}
                             clickable
-                            label="View ID proof"
+                            label={isProofOpening ? 'Opening...' : 'View ID proof'}
                             size="small"
                             color="success"
                             variant="outlined"
+                            disabled={isProofOpening}
                             sx={{ borderRadius: '8px', fontWeight: 600 }}
                           />
                         ) : (

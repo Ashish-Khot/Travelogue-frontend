@@ -21,14 +21,40 @@ const AVAILABLE_STYLES = {
   color: '#065f46',
   borderColor: '#a7f3d0',
 };
+const TOUR_DAY_STYLES = {
+  bgcolor: '#dbeafe',
+  color: '#1e3a8a',
+  borderColor: '#60a5fa',
+};
 
 const ACTIVE_BOOKING_STATUSES = new Set(['pending', 'confirmed', 'accepted']);
 
 const isBusyBooking = (booking) => ACTIVE_BOOKING_STATUSES.has(booking?.status || 'pending');
 
+const toDateKey = (value) => {
+  const date = dayjs(value);
+  if (!date.isValid()) return '';
+  return date.format('YYYY-MM-DD');
+};
+
 // bookings: array of { startDateTime, endDateTime }
-export default function GuideAvailabilityCalendar({ rateType = 'hourly', onSelectDate, selectedDate, bookings = [] }) {
+export default function GuideAvailabilityCalendar({
+  rateType = 'hourly',
+  onSelectDate,
+  selectedDate,
+  bookings = [],
+  guideTourDateKeys = []
+}) {
   const busyBookings = bookings.filter(isBusyBooking);
+  const guideTourDaySet = React.useMemo(
+    () =>
+      new Set(
+        (Array.isArray(guideTourDateKeys) ? guideTourDateKeys : [])
+          .map((dateKey) => String(dateKey || '').trim())
+          .filter(Boolean)
+      ),
+    [guideTourDateKeys]
+  );
 
   // Helper: get day status (full, partial, free) and available hours
   function getDayStatus(date) {
@@ -50,25 +76,29 @@ export default function GuideAvailabilityCalendar({ rateType = 'hourly', onSelec
     else if (busyCount === 24) status = 'full';
     else if (busyCount > 0) status = 'partial';
     const availableHours = busyHours.map((b, i) => !b ? i : null).filter(v => v !== null);
-    return { status, availableHours };
+    const isTourDay = guideTourDaySet.has(toDateKey(dayStart));
+    return { status, availableHours, isTourDay };
   }
 
-  function getStatusStyles(status) {
+  function getStatusStyles(status, isTourDay) {
     if (status === 'full') return BOOKED_STYLES;
     if (status === 'partial') return PARTIAL_STYLES;
+    if (isTourDay) return TOUR_DAY_STYLES;
     return AVAILABLE_STYLES;
   }
 
   function AvailabilityDay(props) {
     const { day, outsideCurrentMonth, disabled, ...other } = props;
-    const { status, availableHours } = getDayStatus(day);
-    const statusStyles = getStatusStyles(status);
+    const { status, availableHours, isTourDay } = getDayStatus(day);
+    const statusStyles = getStatusStyles(status, isTourDay);
     const isFull = status === 'full';
     const tooltipTitle = isFull
       ? 'Booked all day'
       : status === 'partial'
-        ? `Partly booked. Free hours: ${availableHours.length > 0 ? availableHours.map(h => `${h}:00`).join(', ') : 'None'}`
-        : 'Available';
+        ? `Partly booked${isTourDay ? ' + Guide trip day' : ''}. Free hours: ${availableHours.length > 0 ? availableHours.map(h => `${h}:00`).join(', ') : 'None'}`
+        : isTourDay
+          ? 'Guide-organized trip day'
+          : 'Available';
 
     return (
       <Tooltip title={tooltipTitle} arrow>
@@ -77,19 +107,21 @@ export default function GuideAvailabilityCalendar({ rateType = 'hourly', onSelec
             {...other}
             day={day}
             outsideCurrentMonth={outsideCurrentMonth}
-            disabled={disabled || isFull}
+            disabled={disabled || isFull || isTourDay}
             sx={{
               borderRadius: 1.5,
               border: outsideCurrentMonth ? '1px solid transparent' : `1px solid ${statusStyles.borderColor}`,
               backgroundColor: outsideCurrentMonth ? 'transparent' : statusStyles.bgcolor,
               color: outsideCurrentMonth ? 'text.disabled' : statusStyles.color,
-              fontWeight: status === 'free' ? 600 : 800,
+              fontWeight: status === 'free' && !isTourDay ? 600 : 800,
               textDecoration: isFull ? 'line-through' : 'none',
               '&:hover': {
                 backgroundColor: status === 'full'
                   ? BOOKED_STYLES.bgcolor
                   : status === 'partial'
                     ? '#fde68a'
+                    : isTourDay
+                      ? '#bfdbfe'
                     : '#d1fae5',
               },
               '&.Mui-selected': {
@@ -113,6 +145,7 @@ export default function GuideAvailabilityCalendar({ rateType = 'hourly', onSelec
   const legendItems = [
     { label: 'Busy', styles: BOOKED_STYLES },
     { label: 'Partly booked', styles: PARTIAL_STYLES },
+    { label: 'Guide trip day', styles: TOUR_DAY_STYLES },
     { label: 'Available', styles: AVAILABLE_STYLES },
   ];
 
@@ -126,7 +159,10 @@ export default function GuideAvailabilityCalendar({ rateType = 'hourly', onSelec
           displayStaticWrapperAs="desktop"
           value={selectedDate ? dayjs(selectedDate) : null}
           onChange={(date) => onSelectDate?.(date)}
-          shouldDisableDate={(date) => getDayStatus(date).status === 'full'}
+          shouldDisableDate={(date) => {
+            const { status, isTourDay } = getDayStatus(date);
+            return status === 'full' || isTourDay;
+          }}
           slots={{ day: AvailabilityDay }}
         />
       </LocalizationProvider>

@@ -179,6 +179,14 @@ export default function GuideDetailModal({
 
   const tourTypes = Array.isArray(guide.tourTypes) ? guide.tourTypes.filter(Boolean) : [];
   const highlights = Array.isArray(guide.highlights) ? guide.highlights.filter(Boolean) : [];
+  const serviceDestinations = Array.isArray(guide.serviceDestinations)
+    ? guide.serviceDestinations
+      .map((item) => ({
+        destination: String(item?.destination || '').trim(),
+        price: Number(item?.price || 0)
+      }))
+      .filter((item) => item.destination && Number.isFinite(item.price) && item.price > 0)
+    : [];
 
   const verificationItems = [
     { label: 'Identity verified', active: Boolean(guide.verifiedID) },
@@ -189,17 +197,22 @@ export default function GuideDetailModal({
   const heroMedia = galleryItems[0];
   const heroKind = getMediaKind(heroMedia);
   const heroSrc = buildMediaUrl(heroMedia?.url || '');
+  const hasLocalDestinations = serviceDestinations.length > 0;
   const isAvailable = guide.isAvailable !== false;
-  const isBookable = guide.manualAvailability !== false;
+  const isBookable = guide.manualAvailability !== false && hasLocalDestinations;
   const availabilityReason = guide.availabilityReason || (isAvailable ? 'available_now' : 'unavailable');
-  const availabilityLabel = availabilityReason === 'booked_now'
+  const availabilityLabel = !hasLocalDestinations
+    ? 'Destinations Pending'
+    : availabilityReason === 'booked_now'
     ? 'Booked Now'
     : availabilityReason === 'manual_offline'
       ? 'Unavailable'
       : isAvailable
         ? 'Available'
         : 'Unavailable';
-  const availabilityBg = availabilityReason === 'booked_now'
+  const availabilityBg = !hasLocalDestinations
+    ? 'rgba(71, 85, 105, 0.96)'
+    : availabilityReason === 'booked_now'
     ? 'rgba(245, 158, 11, 0.96)'
     : isAvailable
       ? 'rgba(16, 185, 129, 0.96)'
@@ -948,7 +961,7 @@ export default function GuideDetailModal({
                   <Chip
                     label={
                       !isBookable
-                        ? 'Currently Unavailable'
+                        ? (hasLocalDestinations ? 'Currently Unavailable' : 'Destinations Not Configured')
                         : availabilityReason === 'booked_now'
                           ? 'Busy Right Now'
                           : 'Available to Book'
@@ -975,6 +988,7 @@ export default function GuideDetailModal({
                       `Response time: ${formatResponseTime(guide.averageResponseTime)}`,
                       `${guide.bookings || 0} completed tours`,
                       `${languages.length || 0} language${languages.length === 1 ? '' : 's'} spoken`,
+                      `${serviceDestinations.length || 0} local destination${serviceDestinations.length === 1 ? '' : 's'} configured`,
                       `${guide.cancelPolicy || 'Moderate'} cancellation policy`,
                     ].map((item) => (
                       <Stack key={item} direction="row" alignItems="center" gap={0.7}>
@@ -985,6 +999,31 @@ export default function GuideDetailModal({
                       </Stack>
                     ))}
                   </Stack>
+
+                  {serviceDestinations.length > 0 ? (
+                    <Box sx={{ mb: 1.4, p: 1, borderRadius: 1.4, border: '1px solid #fed7aa', bgcolor: '#fff7ed' }}>
+                      <Typography sx={{ color: '#9a3412', fontSize: '0.76rem', fontWeight: 800, mb: 0.7 }}>
+                        Available Local Destinations
+                      </Typography>
+                      <Stack spacing={0.5}>
+                        {serviceDestinations.slice(0, 5).map((item) => (
+                          <Stack
+                            key={item.destination}
+                            direction="row"
+                            alignItems="center"
+                            justifyContent="space-between"
+                          >
+                            <Typography sx={{ color: '#7c2d12', fontSize: '0.78rem', fontWeight: 700 }}>
+                              {item.destination}
+                            </Typography>
+                            <Typography sx={{ color: '#9a3412', fontSize: '0.78rem', fontWeight: 800 }}>
+                              INR {Math.round(item.price)}
+                            </Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    </Box>
+                  ) : null}
 
                   <Button
                     variant="contained"
@@ -1010,7 +1049,7 @@ export default function GuideDetailModal({
                       },
                     }}
                   >
-                    {isBookable ? 'Book This Guide' : 'Unavailable'}
+                    {isBookable ? 'Book This Guide' : hasLocalDestinations ? 'Unavailable' : 'Setup Pending'}
                   </Button>
 
                   <Button

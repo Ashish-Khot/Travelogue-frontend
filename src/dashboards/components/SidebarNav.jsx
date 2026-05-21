@@ -41,6 +41,7 @@ const collapsedWidth = 72;
 const iconMap = {
   Dashboard: <DashboardIcon sx={{ color: 'primary.main' }} />,
   'Explore Destinations': <ExploreIcon sx={{ color: 'primary.main' }} />,
+  'Explore Tours': <ExploreIcon sx={{ color: 'primary.main' }} />,
   'Explore Guides': <PeopleAltIcon sx={{ color: 'primary.main' }} />,
   'Virtual Guide': <SupportAgentIcon sx={{ color: 'primary.main' }} />,
   'Itinerary Planner': <EventNoteIcon sx={{ color: 'primary.main' }} />,

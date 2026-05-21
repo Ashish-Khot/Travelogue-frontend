@@ -65,6 +65,7 @@ const PremiumBookingCard = ({
   onChat,
   onEdit,
   onDelete,
+  onPayAdvance,
   isEditable,
   loading = false
 }) => {
@@ -100,6 +101,16 @@ const PremiumBookingCard = ({
 
   const startFormatted = booking.startDateTime ? formatDateTime(booking.startDateTime) : null;
   const endFormatted = booking.endDateTime ? formatDateTime(booking.endDateTime) : null;
+  const advanceStatus = booking.advancePaymentStatus || 'awaiting_payment';
+  const remainingStatus = booking.remainingPaymentStatus || 'pending';
+  const showAdvanceAction = booking.status === 'pending' && ['awaiting_payment', 'rejected'].includes(advanceStatus);
+  const advanceLabel = advanceStatus === 'submitted'
+    ? 'Advance submitted'
+    : advanceStatus === 'verified'
+      ? 'Advance verified'
+      : advanceStatus === 'rejected'
+        ? 'Advance rejected'
+        : 'Advance pending';
 
   return (
     <motion.div
@@ -204,6 +215,9 @@ const PremiumBookingCard = ({
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
               Total Price
             </Typography>
+            <Typography variant="caption" sx={{ display: 'block', color: advanceStatus === 'verified' ? '#166534' : '#b45309', fontWeight: 700, mt: 0.5 }}>
+              {advanceLabel}
+            </Typography>
           </Box>
         </Box>
 
@@ -265,7 +279,44 @@ const PremiumBookingCard = ({
                   </Typography>
                 </Box>
               )}
+
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#4F8A8B', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                  Advance
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5, color: advanceStatus === 'verified' ? '#166534' : '#92400e' }}>
+                  {currencyInfo.symbol}{booking.advanceAmount || 0} - {advanceLabel}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#4F8A8B', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                  Remaining Balance
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5, color: remainingStatus === 'paid' ? '#166534' : '#92400e' }}>
+                  {currencyInfo.symbol}{booking.remainingAmount || 0} - {remainingStatus === 'paid' ? 'Received by guide' : 'Pay during tour'}
+                </Typography>
+              </Box>
             </Box>
+
+            {booking.advanceRejectedReason && (
+              <Box
+                sx={{
+                  background: '#fff7ed',
+                  border: '1px solid #fdba74',
+                  borderRadius: '10px',
+                  p: 2,
+                  mb: 2.5,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#9a3412', mb: 0.5 }}>
+                  Advance payment needs attention
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#7c2d12' }}>
+                  {booking.advanceRejectedReason}
+                </Typography>
+              </Box>
+            )}
 
             {/* Review Request Section */}
             {booking.status === 'completed' && booking.reviewRequestSent && !booking.reviewRequestStatus && (
@@ -413,6 +464,27 @@ const PremiumBookingCard = ({
                 onMouseLeave={(e) => (e.target.style.boxShadow = 'none')}
               >
                 <DeleteIcon sx={{ fontSize: 16 }} /> Delete
+              </motion.button>
+            )}
+
+            {showAdvanceAction && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onPayAdvance?.(booking)}
+                style={{
+                  backgroundColor: '#0f766e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                {advanceStatus === 'rejected' ? 'Resubmit Advance' : 'Pay Advance'}
               </motion.button>
             )}
           </Stack>

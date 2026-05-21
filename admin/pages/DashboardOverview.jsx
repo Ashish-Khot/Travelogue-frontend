@@ -19,7 +19,6 @@ import {
 import GroupIcon from '@mui/icons-material/Group';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import HotelIcon from '@mui/icons-material/Hotel';
-import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -109,7 +108,6 @@ export default function DashboardOverview() {
     { label: 'Total Tourists', value: stats.touristCount, icon: GroupIcon, color: '#2563eb', trend: 'up', trendValue: 12, subtitle: 'Active users' },
     { label: 'Total Guides', value: stats.guideCount, icon: PersonAddAltIcon, color: '#16a34a', trend: 'up', trendValue: 8, subtitle: 'Verified guides' },
     { label: 'Total Hotels', value: stats.hotelCount, icon: HotelIcon, color: '#7c3aed', trend: 'up', trendValue: 5, subtitle: 'Partner hotels' },
-    { label: 'Total Hospitals', value: stats.hospitalCount, icon: LocalHospitalIcon, color: '#dc2626', trend: 'down', trendValue: 2, subtitle: 'Emergency contacts' },
     { label: 'Active Chats', value: stats.chatCount, icon: ChatBubbleOutlineIcon, color: '#0891b2', subtitle: 'Ongoing conversations' },
     { label: 'Pending Approvals', value: stats.pendingGuides, icon: WarningAmberIcon, color: '#d97706', percentage: (stats.pendingGuides / Math.max(stats.guideCount, 1) * 100).toFixed(0), subtitle: 'Awaiting review' },
     { label: 'Total Travelogues', value: stats.travelogueCount, icon: DescriptionIcon, color: '#4f46e5', trend: 'up', trendValue: 15, subtitle: 'User stories' },

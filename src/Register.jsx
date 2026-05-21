@@ -19,7 +19,6 @@ import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 
 import PersonIcon from "@mui/icons-material/Person";
 import RoomIcon from "@mui/icons-material/Room";
-import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import HotelIcon from "@mui/icons-material/Hotel";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
@@ -42,11 +41,6 @@ const roles = [
     value: "hotel",
     label: "Hotel",
     icon: <HotelIcon fontSize="small" />,
-  },
-  {
-    value: "admin",
-    label: "Admin",
-    icon: <AdminPanelSettingsIcon fontSize="small" />,
   },
 ];
 
@@ -297,7 +291,7 @@ export default function Register() {
           <Box className={styles.registerPills}>
             <Typography className={styles.registerPill}>Fast signup</Typography>
             <Typography className={styles.registerPill}>Secure access</Typography>
-            <Typography className={styles.registerPill}>All roles</Typography>
+            <Typography className={styles.registerPill}>Tourist, Guide, Hotel</Typography>
           </Box>
         </Box>
 
@@ -320,11 +314,15 @@ export default function Register() {
               </Typography>
             </Box>
             <Typography className={styles.sectionLabel}>Choose role</Typography>
+            <Typography className={styles.securityNotice}>
+              Admin signup is disabled. Admin access is provided only by the system.
+            </Typography>
             <ToggleButtonGroup
               value={selectedRole}
               exclusive
               onChange={handleRole}
               className={styles.roleGroup}
+              sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
             >
               {roles.map((role) => (
                 <ToggleButton

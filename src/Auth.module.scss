@@ -310,6 +310,17 @@
   line-height: 1.45;
 }
 
+.securityNotice {
+  margin: -8px 0 14px;
+  padding: 9px 12px;
+  border-radius: 11px;
+  border: 1px solid rgba(119, 170, 147, 0.38);
+  background: rgba(119, 170, 147, 0.14);
+  color: #294236;
+  font-size: 0.82rem;
+  line-height: 1.42;
+}
+
 .form {
   display: grid;
   gap: 16px;
@@ -497,6 +508,11 @@
   .roleInner {
     flex-direction: row;
     gap: 7px;
+  }
+
+  .securityNotice {
+    margin: 0 0 12px;
+    font-size: 0.79rem;
   }
 }
 

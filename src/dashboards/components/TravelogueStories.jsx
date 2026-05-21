@@ -114,6 +114,7 @@ export default function TravelogueStories() {
   const baseVisibleCount = isMobile ? 4 : 6;
 
   const [travelogues, setTravelogues] = useState([]);
+  const [storyTotalCount, setStoryTotalCount] = useState(0);
   const [myLatest, setMyLatest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -156,8 +157,10 @@ export default function TravelogueStories() {
     try {
       setLoading(true);
       setError('');
-      const response = await API.get('/travelogue/all?sortBy=newest&page=1&limit=24');
-      setTravelogues(response.data.travelogues || []);
+      const response = await API.get('/travelogue/all?sortBy=newest&page=1&limit=60');
+      const list = response.data.travelogues || [];
+      setTravelogues(list);
+      setStoryTotalCount(Number(response.data?.pagination?.total) || list.length);
     } catch (err) {
       setError('Failed to load stories');
     } finally {
@@ -418,7 +421,7 @@ export default function TravelogueStories() {
 
             <Stack direction="row" spacing={1.2} alignItems="center" sx={{ width: { xs: '100%', md: 'auto' } }}>
               <Chip
-                label={`${travelogues.length} live`}
+                label={`${storyTotalCount || travelogues.length} live`}
                 sx={{
                   bgcolor: 'rgba(79,138,139,0.08)',
                   color: '#0F766E',

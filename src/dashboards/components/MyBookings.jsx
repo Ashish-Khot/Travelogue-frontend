@@ -20,6 +20,7 @@ import { Stack, Paper, Skeleton, FormControlLabel, Switch } from '@mui/material'
 import { motion, AnimatePresence } from 'framer-motion';
 import BookingFiltersBar from './BookingFiltersBar';
 import PremiumBookingCard from './PremiumBookingCard';
+import { buildMediaUrl } from '../../utils/media';
 import {
   GridView as GridViewIcon,
   ViewList as ListViewIcon,
@@ -40,6 +41,10 @@ export default function MyBookings() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [reviewDialog, setReviewDialog] = useState({ open: false, booking: null });
   const [reviewActionLoading, setReviewActionLoading] = useState(false);
+  const [advanceDialog, setAdvanceDialog] = useState({ open: false, booking: null });
+  const [advanceTxnRef, setAdvanceTxnRef] = useState('');
+  const [advanceProofFile, setAdvanceProofFile] = useState(null);
+  const [advanceSubmitting, setAdvanceSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [filters, setFilters] = useState({
     searchQuery: '',
@@ -141,6 +146,58 @@ export default function MyBookings() {
     };
   }, []);
 
+  const buildUpiLink = (booking) => {
+    const payment = booking?.guidePaymentSnapshot || {};
+    const params = new URLSearchParams({
+      pa: String(payment?.upiId || '').trim(),
+      pn: String(payment?.payeeName || '').trim(),
+      am: String(Number(booking?.advanceAmount || 0).toFixed(2)),
+      cu: 'INR',
+      tn: `Advance for ${booking?.destination || 'guide booking'} (${String(booking?._id || '').slice(-6).toUpperCase()})`,
+    });
+    return `upi://pay?${params.toString()}`;
+  };
+
+  const handleOpenAdvancePayment = (booking) => {
+    setAdvanceDialog({ open: true, booking });
+    setAdvanceTxnRef(booking?.advanceTxnRef || '');
+    setAdvanceProofFile(null);
+  };
+
+  const handleSubmitAdvancePayment = async () => {
+    if (!advanceDialog.booking?._id) return;
+    if (!advanceTxnRef.trim()) {
+      setSnackbar({ open: true, message: 'Enter the UPI reference / UTR number.', severity: 'error' });
+      return;
+    }
+
+    setAdvanceSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('txnRef', advanceTxnRef.trim());
+      if (advanceProofFile) formData.append('screenshot', advanceProofFile);
+      await api.post(`/booking/${advanceDialog.booking._id}/advance-payment`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const res = await api.get(`/booking/tourist/${user._id}`);
+      setBookings(res.data.bookings || []);
+      setAdvanceDialog({ open: false, booking: null });
+      setAdvanceTxnRef('');
+      setAdvanceProofFile(null);
+      setSnackbar({ open: true, message: 'Advance payment proof submitted for guide verification.', severity: 'success' });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'Failed to submit advance payment proof.',
+        severity: 'error'
+      });
+    } finally {
+      setAdvanceSubmitting(false);
+    }
+  };
+
   /**
    * Advanced filtering and sorting logic
    */
@@ -210,13 +267,23 @@ export default function MyBookings() {
 
   // Calculate statistics
   const stats = useMemo(() => {
+    const calculateActualPaid = (booking) => {
+      const advancePaid = ['submitted', 'verified'].includes(String(booking.advancePaymentStatus || ''))
+        ? Number(booking.advanceAmount || 0)
+        : 0;
+      const remainingPaid = booking.remainingPaymentStatus === 'paid'
+        ? Number(booking.remainingAmount || 0)
+        : 0;
+      return advancePaid + remainingPaid;
+    };
+
     return {
       total: bookings.length,
       pending: bookings.filter(b => b.status === 'pending').length,
       confirmed: bookings.filter(b => b.status === 'confirmed').length,
       completed: bookings.filter(b => b.status === 'completed').length,
       cancelled: bookings.filter(b => b.status === 'cancelled').length,
-      totalSpent: bookings.reduce((sum, b) => sum + (b.price || 0), 0)
+      totalSpent: bookings.reduce((sum, booking) => sum + calculateActualPaid(booking), 0)
     };
   }, [bookings]);
 
@@ -523,7 +590,12 @@ export default function MyBookings() {
                   }}
                   onEdit={handleOpenEdit}
                   onDelete={handleOpenDelete}
-                  isEditable={booking.status === 'pending' || booking.status === 'cancelled'}
+                  onPayAdvance={handleOpenAdvancePayment}
+                  isEditable={
+                    booking.sourceType !== 'tour' &&
+                    (booking.status === 'pending' || booking.status === 'cancelled') &&
+                    !['submitted', 'verified'].includes(String(booking.advancePaymentStatus || ''))
+                  }
                 />
               ))}
             </AnimatePresence>
@@ -751,6 +823,122 @@ export default function MyBookings() {
           >
             Accept & Continue
           </motion.button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={advanceDialog.open}
+        onClose={() => setAdvanceDialog({ open: false, booking: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '1.2rem', color: '#1a1a1a' }}>
+          Complete Advance Payment
+        </DialogTitle>
+        <DialogContent>
+          {advanceDialog.booking && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: 2, border: '1px solid #dbe3ef' }}>
+                <Typography variant="subtitle2" fontWeight={700}>Booking: {advanceDialog.booking.destination || 'Guide Tour'}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Pay now: INR {advanceDialog.booking.advanceAmount || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Pay later during tour: INR {advanceDialog.booking.remainingAmount || 0}
+                </Typography>
+              </Box>
+
+              {advanceDialog.booking.guidePaymentSnapshot?.qrImage && (
+                <Box
+                  component="img"
+                  src={buildMediaUrl(advanceDialog.booking.guidePaymentSnapshot.qrImage)}
+                  alt="Guide payment QR"
+                  sx={{ width: '100%', maxWidth: 240, aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: 2, border: '1px solid #dbe3ef', mx: 'auto' }}
+                />
+              )}
+
+              <Box sx={{ bgcolor: '#fff', p: 2, borderRadius: 2, border: '1px solid #dbe3ef' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>UPI Payee Name</Typography>
+                <Typography sx={{ fontWeight: 700, mb: 1 }}>{advanceDialog.booking.guidePaymentSnapshot?.payeeName || 'Not provided'}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>UPI ID</Typography>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                  <Typography sx={{ fontWeight: 700, wordBreak: 'break-word' }}>{advanceDialog.booking.guidePaymentSnapshot?.upiId || 'Not provided'}</Typography>
+                  {advanceDialog.booking.guidePaymentSnapshot?.upiId && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(advanceDialog.booking.guidePaymentSnapshot.upiId);
+                          setSnackbar({ open: true, message: 'UPI ID copied.', severity: 'success' });
+                        } catch {
+                          setSnackbar({ open: true, message: 'Could not copy UPI ID.', severity: 'error' });
+                        }
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  )}
+                </Stack>
+                {advanceDialog.booking.guidePaymentSnapshot?.advancePaymentNotes && (
+                  <Alert severity="info" sx={{ mt: 1.5 }}>
+                    {advanceDialog.booking.guidePaymentSnapshot.advancePaymentNotes}
+                  </Alert>
+                )}
+              </Box>
+
+              {advanceDialog.booking.guidePaymentSnapshot?.upiId && (
+                <Button
+                  variant="contained"
+                  onClick={() => { window.location.href = buildUpiLink(advanceDialog.booking); }}
+                  sx={{ textTransform: 'none', fontWeight: 700 }}
+                >
+                  Open In UPI App
+                </Button>
+              )}
+
+              <TextField
+                label="UPI Reference / UTR Number"
+                fullWidth
+                value={advanceTxnRef}
+                onChange={(event) => setAdvanceTxnRef(event.target.value)}
+                placeholder="Example: 412345678901"
+              />
+
+              <Button component="label" variant="outlined" sx={{ textTransform: 'none', fontWeight: 700, width: 'fit-content' }}>
+                {advanceProofFile ? 'Change Screenshot' : 'Upload Screenshot (Optional)'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(event) => setAdvanceProofFile(event.target.files?.[0] || null)}
+                />
+              </Button>
+              {advanceProofFile && (
+                <Typography variant="caption" color="text.secondary">
+                  Selected: {advanceProofFile.name}
+                </Typography>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, pt: 1 }}>
+          <Button onClick={() => setAdvanceDialog({ open: false, booking: null })}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmitAdvancePayment}
+            disabled={advanceSubmitting}
+            variant="contained"
+          >
+            {advanceSubmitting ? 'Submitting...' : 'Submit Advance Proof'}
+          </Button>
         </DialogActions>
       </Dialog>
 

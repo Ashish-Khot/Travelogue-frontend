@@ -1,31 +1,44 @@
 // Real Earnings Page with Charts
+const getCollectedRevenue = (booking) => {
+  const advanceCollected = booking?.advancePaymentStatus === 'verified' ? Number(booking?.advanceAmount || 0) : 0;
+  const remainingCollected = booking?.remainingPaymentStatus === 'paid' ? Number(booking?.remainingAmount || 0) : 0;
+  return advanceCollected + remainingCollected;
+};
+
+const getOutstandingRevenue = (booking) => {
+  const advanceOutstanding = booking?.status === 'pending' && booking?.advancePaymentStatus !== 'verified'
+    ? Number(booking?.advanceAmount || 0)
+    : 0;
+  const remainingOutstanding = ['confirmed', 'completed'].includes(String(booking?.status || '').toLowerCase()) && booking?.remainingPaymentStatus !== 'paid'
+    ? Number(booking?.remainingAmount || 0)
+    : 0;
+  return advanceOutstanding + remainingOutstanding;
+};
+
 function EarningsPage({ bookings }) {
   const [loading, setLoading] = React.useState(false);
 
   // Calculate earnings metrics
   const totalEarnings = bookings
-    .filter(b => b.status === 'confirmed' || b.status === 'completed')
-    .reduce((sum, b) => sum + (b.price || 0), 0);
+    .reduce((sum, booking) => sum + getCollectedRevenue(booking), 0);
 
   const thisMonth = bookings.filter(b => {
     const bookingMonth = new Date(b.startDateTime).getMonth();
     const currentMonth = new Date().getMonth();
-    return bookingMonth === currentMonth && (b.status === 'confirmed' || b.status === 'completed');
-  }).reduce((sum, b) => sum + (b.price || 0), 0);
+    return bookingMonth === currentMonth;
+  }).reduce((sum, booking) => sum + getCollectedRevenue(booking), 0);
 
   const pendingPayments = bookings
-    .filter(b => b.status === 'pending' || b.status === 'confirmed')
-    .reduce((sum, b) => sum + (b.price || 0), 0);
+    .reduce((sum, booking) => sum + getOutstandingRevenue(booking), 0);
 
   const completedBookings = bookings.filter(b => b.status === 'completed').length;
 
   // Earnings by tour (destination)
   const earningsByDest = {};
   bookings
-    .filter(b => b.status === 'confirmed' || b.status === 'completed')
-    .forEach(b => {
-      const dest = b.destination || 'Other';
-      earningsByDest[dest] = (earningsByDest[dest] || 0) + (b.price || 0);
+    .forEach((booking) => {
+      const dest = booking.destination || 'Other';
+      earningsByDest[dest] = (earningsByDest[dest] || 0) + getCollectedRevenue(booking);
     });
 
   // Daily earnings for last 7 days
@@ -38,14 +51,13 @@ function EarningsPage({ bookings }) {
   }
 
   bookings
-    .filter(b => b.status === 'confirmed' || b.status === 'completed')
-    .forEach(b => {
-      const date = new Date(b.startDateTime);
+    .forEach((booking) => {
+      const date = new Date(booking.startDateTime);
       const today = new Date();
       const daysDiff = Math.floor((today - date) / (1000 * 60 * 60 * 24));
       if (daysDiff <= 6 && daysDiff >= 0) {
         const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        dailyEarnings[dateStr] = (dailyEarnings[dateStr] || 0) + (b.price || 0);
+        dailyEarnings[dateStr] = (dailyEarnings[dateStr] || 0) + getCollectedRevenue(booking);
       }
     });
 
@@ -153,7 +165,7 @@ function EarningsPage({ bookings }) {
             </thead>
             <tbody>
               {bookings
-                .filter(b => b.status === 'confirmed' || b.status === 'completed')
+                .filter((b) => getCollectedRevenue(b) > 0)
                 .sort((a, b) => new Date(b.startDateTime) - new Date(a.startDateTime))
                 .slice(0, 10)
                 .map(b => (
@@ -646,7 +658,8 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed').length;
   const upcomingTours = bookings.filter(b => new Date(b.startDateTime) > new Date()).length;
   const completedTours = bookings.filter(b => b.status === 'completed').length;
-  const totalEarnings = bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').reduce((sum, b) => sum + (b.price || 0), 0);
+  const totalEarnings = bookings.reduce((sum, booking) => sum + getCollectedRevenue(booking), 0);
+  const outstandingAmount = bookings.reduce((sum, booking) => sum + getOutstandingRevenue(booking), 0);
 
   const thisMonthBookings = bookings.filter(b => {
     const bookingMonth = new Date(b.startDateTime).getMonth();
@@ -674,7 +687,7 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
   }));
   const statCards = [
     { label: 'Bookings', value: totalBookings, meta: `${activeBookings} active`, tone: guideColors.primary, icon: <BookingsIcon /> },
-    { label: 'Earnings', value: formatCurrency(totalEarnings), meta: `${confirmedBookings} confirmed`, tone: '#16a34a', icon: <EarningsIcon /> },
+    { label: 'Collected', value: formatCurrency(totalEarnings), meta: `${formatCurrency(outstandingAmount)} still due`, tone: '#16a34a', icon: <EarningsIcon /> },
     { label: 'Upcoming', value: upcomingTours, meta: upcomingBooking ? formatDate(upcomingBooking.startDateTime) : 'No upcoming tour', tone: guideColors.secondary, icon: <CalendarIcon /> },
     { label: 'Rating', value: reviewCount > 0 ? ratingValue.toFixed(1) : 'New', meta: `${reviewCount} reviews`, tone: '#f59e0b', icon: <ReviewsIcon /> },
   ];
@@ -884,7 +897,7 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
         <Box sx={{ p: 3, bgcolor: '#fff', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 8px 16px rgba(0,0,0,0.12)' } }}>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
             <Box>
-              <Typography variant="subtitle2" color="text.secondary" fontWeight={600} mb={1}>TOTAL EARNINGS</Typography>
+              <Typography variant="subtitle2" color="text.secondary" fontWeight={600} mb={1}>COLLECTED REVENUE</Typography>
               <Typography variant="h4" fontWeight={800} sx={{ color: '#10b981' }}>₹{totalEarnings.toFixed(0)}</Typography>
             </Box>
             <Box sx={{ p: 1.5, bgcolor: '#dcfce7', borderRadius: 2 }}>
@@ -1063,7 +1076,7 @@ function DashboardPage({ user, bookings, guideProfile, guideReviews, tours }) {
 // Enhanced Tour Card Component
 function TourCard({ tour, onEdit, onDelete }) {
   const bookingCount = tour.bookings?.length || 0;
-  const revenue = tour.bookings?.reduce((sum, b) => sum + (b.price || 0), 0) || 0;
+  const revenue = tour.bookings?.reduce((sum, booking) => sum + getCollectedRevenue(booking), 0) || 0;
 
   return (
     <Box
@@ -1385,6 +1398,7 @@ const CalendarPage = () => (
 );
 
 import GuideChatPanel from './components/GuideChatPanel';
+import GuideTourManager from './components/GuideTourManager';
 
 // Placeholder for MessagesPage
 function MessagesPage({ user, preselectedTouristId, preselectToken, onTouristsChange }) {
@@ -1582,6 +1596,40 @@ export default function GuideDashboard() {
       ? guideProfile.userId
       : {};
     const languageText = getLanguagesText(guideProfile?.languages) || guideProfile?.language || '';
+    const normalizeServiceDestinations = (list = [], fallbackPrice = 0) => {
+      const rawList = Array.isArray(list) ? list : [];
+      const seen = new Set();
+
+      return rawList
+        .map((item) => {
+          const destination = String(item?.destination || '').trim();
+          const price = Number(item?.price ?? fallbackPrice);
+          if (!destination || !Number.isFinite(price) || price <= 0) return null;
+          const key = destination.toLowerCase();
+          if (seen.has(key)) return null;
+          seen.add(key);
+          return {
+            _id: String(item?._id || ''),
+            destination,
+            price: Math.round(price),
+          };
+        })
+        .filter(Boolean);
+    };
+
+    const getStartingPrice = (destinations = [], fallback = 0) => {
+      const prices = (Array.isArray(destinations) ? destinations : [])
+        .map((item) => Number(item?.price || 0))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      if (prices.length === 0) return Number(fallback || 0);
+      return Math.min(...prices);
+    };
+
+    const initialServiceDestinations = normalizeServiceDestinations(
+      guideProfile?.serviceDestinations,
+      guideProfile?.price ?? 0
+    );
+    const initialPrice = getStartingPrice(initialServiceDestinations, guideProfile?.price ?? 0);
 
     const [edit, setEdit] = useState(false);
     const [form, setForm] = useState({
@@ -1593,14 +1641,23 @@ export default function GuideDashboard() {
       language: languageText,
       bio: guideProfile?.bio || '',
       experienceYears: guideProfile?.experienceYears ?? 0,
-      price: guideProfile?.price ?? 0,
+      price: initialPrice,
       currency: 'INR',
       rateType: guideProfile?.rateType || 'daily',
+      serviceDestinations: initialServiceDestinations,
+      acceptManualUpi: Boolean(guideProfile?.acceptManualUpi),
+      upiPayeeName: guideProfile?.upiPayeeName || '',
+      upiId: guideProfile?.upiId || '',
+      advancePaymentType: guideProfile?.advancePaymentType || 'percentage',
+      advancePaymentValue: guideProfile?.advancePaymentValue ?? 20,
+      advancePaymentNotes: guideProfile?.advancePaymentNotes || '',
       avatar: account?.avatar || guideProfile?.avatar || user?.avatar || '',
     });
     const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
     const [tourMedia, setTourMedia] = useState(Array.isArray(guideProfile?.tourMedia) ? guideProfile.tourMedia : []);
     const [uploading, setUploading] = useState(false);
+    const [paymentQrUploading, setPaymentQrUploading] = useState(false);
+    const [paymentQrDeleting, setPaymentQrDeleting] = useState(false);
     const [mediaUploading, setMediaUploading] = useState(false);
     const [mediaDeletingId, setMediaDeletingId] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -1616,6 +1673,11 @@ export default function GuideDashboard() {
       const avatar = profileUser?.avatar || guideProfile?.avatar || user?.avatar || '';
 
       const languageName = getLanguagesText(guideProfile?.languages) || guideProfile?.language || '';
+      const normalizedServiceDestinations = normalizeServiceDestinations(
+        guideProfile?.serviceDestinations,
+        guideProfile?.price ?? 0
+      );
+      const startingPrice = getStartingPrice(normalizedServiceDestinations, guideProfile?.price ?? 0);
 
       setForm({
         name: profileUser?.name || guideProfile?.name || user?.name || '',
@@ -1626,9 +1688,16 @@ export default function GuideDashboard() {
         language: languageName,
         bio: guideProfile?.bio || '',
         experienceYears: guideProfile?.experienceYears ?? 0,
-        price: guideProfile?.price ?? 0,
+        price: startingPrice,
         currency: 'INR',
         rateType: guideProfile?.rateType || 'daily',
+        serviceDestinations: normalizedServiceDestinations,
+        acceptManualUpi: Boolean(guideProfile?.acceptManualUpi),
+        upiPayeeName: guideProfile?.upiPayeeName || '',
+        upiId: guideProfile?.upiId || '',
+        advancePaymentType: guideProfile?.advancePaymentType || 'percentage',
+        advancePaymentValue: guideProfile?.advancePaymentValue ?? 20,
+        advancePaymentNotes: guideProfile?.advancePaymentNotes || '',
         avatar,
       });
       setAvatarPreview(avatar);
@@ -1639,8 +1708,50 @@ export default function GuideDashboard() {
       const { name, value } = e.target;
       setForm({
         ...form,
-        [name]: ['price', 'experienceYears'].includes(name) ? Number(value) : value
+        [name]: ['price', 'experienceYears', 'advancePaymentValue'].includes(name)
+          ? Number(value)
+          : name === 'acceptManualUpi'
+            ? value === 'true'
+            : value
       });
+    };
+
+    const updateServiceDestinations = (nextDestinations) => {
+      const normalized = Array.isArray(nextDestinations) ? nextDestinations : [];
+      const nextPrice = getStartingPrice(normalized, 0);
+      setForm((prev) => ({
+        ...prev,
+        serviceDestinations: normalized,
+        price: nextPrice
+      }));
+    };
+
+    const handleServiceDestinationChange = (index, field) => (event) => {
+      const rawValue = event.target.value;
+      const current = Array.isArray(form.serviceDestinations) ? [...form.serviceDestinations] : [];
+      if (!current[index]) return;
+
+      current[index] = {
+        ...current[index],
+        [field]: field === 'price' ? rawValue : rawValue
+      };
+      updateServiceDestinations(current);
+    };
+
+    const addServiceDestination = () => {
+      const current = Array.isArray(form.serviceDestinations) ? [...form.serviceDestinations] : [];
+      if (current.length >= 5) {
+        setErrorMsg('You can add up to 5 local destinations.');
+        return;
+      }
+      current.push({ destination: '', price: '' });
+      updateServiceDestinations(current);
+    };
+
+    const removeServiceDestination = (index) => {
+      const current = Array.isArray(form.serviceDestinations) ? [...form.serviceDestinations] : [];
+      const next = current.filter((_, idx) => idx !== index);
+      updateServiceDestinations(next);
     };
 
     const handleAvatarChange = async (e) => {
@@ -1672,6 +1783,7 @@ export default function GuideDashboard() {
     };
 
     const mediaUrl = (value) => buildMediaUrl(value);
+    const paymentQrImageUrl = mediaUrl(guideProfile?.upiQrImage || '');
 
     const getMediaKind = (item) => {
       const explicitType = item?.mediaType;
@@ -1727,6 +1839,49 @@ export default function GuideDashboard() {
       }
     };
 
+    const handlePaymentQrUpload = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setPaymentQrUploading(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+      try {
+        const formData = new FormData();
+        formData.append('paymentQr', file);
+        const response = await api.post('/guide/profile/payment-qr', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (response.data?.guide) {
+          setGuideProfile(response.data.guide);
+        }
+        setSuccessMsg('Payment QR uploaded successfully.');
+      } catch (err) {
+        console.error('Guide payment QR upload error:', err.response?.data || err.message);
+        setErrorMsg(err.response?.data?.message || 'Failed to upload payment QR');
+      } finally {
+        setPaymentQrUploading(false);
+        event.target.value = '';
+      }
+    };
+
+    const handleDeletePaymentQr = async () => {
+      setPaymentQrDeleting(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+      try {
+        const response = await api.delete('/guide/profile/payment-qr');
+        if (response.data?.guide) {
+          setGuideProfile(response.data.guide);
+        }
+        setSuccessMsg('Payment QR removed. Advance payment has been disabled.');
+      } catch (err) {
+        console.error('Guide payment QR delete error:', err.response?.data || err.message);
+        setErrorMsg(err.response?.data?.message || 'Failed to remove payment QR');
+      } finally {
+        setPaymentQrDeleting(false);
+      }
+    };
+
     const handleSubmit = async e => {
       e.preventDefault();
       setErrorMsg('');
@@ -1742,6 +1897,38 @@ export default function GuideDashboard() {
           return;
         }
 
+        const normalizedServiceDestinations = (Array.isArray(form.serviceDestinations) ? form.serviceDestinations : [])
+          .map((item) => ({
+            destination: String(item?.destination || '').trim(),
+            price: Number(item?.price || 0)
+          }))
+          .filter((item) => item.destination);
+
+        const uniqueDestinations = [];
+        const seenDestinations = new Set();
+        normalizedServiceDestinations.forEach((item) => {
+          const key = item.destination.toLowerCase();
+          if (seenDestinations.has(key)) return;
+          seenDestinations.add(key);
+          uniqueDestinations.push(item);
+        });
+
+        if (uniqueDestinations.length === 0) {
+          setErrorMsg('Add at least one local destination with price.');
+          return;
+        }
+        if (uniqueDestinations.length > 5) {
+          setErrorMsg('You can add up to 5 local destinations.');
+          return;
+        }
+        const invalidDestination = uniqueDestinations.find((item) => !Number.isFinite(item.price) || item.price <= 0);
+        if (invalidDestination) {
+          setErrorMsg('Each destination must have a valid price greater than 0.');
+          return;
+        }
+
+        const startingPrice = getStartingPrice(uniqueDestinations, form.price);
+
         const payload = {
           name: form.name,
           bio: form.bio,
@@ -1750,9 +1937,19 @@ export default function GuideDashboard() {
           country: form.country,
           interests: form.interests,
           experienceYears: Number(form.experienceYears) || 0,
-          price: Number(form.price) || 0,
+          price: Number(startingPrice) || 0,
           currency: 'INR',
           rateType: form.rateType,
+          serviceDestinations: uniqueDestinations.map((item) => ({
+            destination: item.destination,
+            price: Math.round(item.price)
+          })),
+          acceptManualUpi: Boolean(form.acceptManualUpi),
+          upiPayeeName: form.upiPayeeName,
+          upiId: form.upiId,
+          advancePaymentType: form.advancePaymentType,
+          advancePaymentValue: Number(form.advancePaymentValue) || 0,
+          advancePaymentNotes: form.advancePaymentNotes,
         };
         const response = await api.put('/guide/profile', payload);
         if (response.data.guide) {
@@ -1858,9 +2055,15 @@ export default function GuideDashboard() {
               </Typography>
             </Box>
             <Box sx={{ p: 1.2, borderRadius: 1.6, bgcolor: '#fff', border: '1px solid #e3e8ef' }}>
-              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>Current Rate</Typography>
+              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>Starting Rate</Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#1e293b' }}>
                 INR {Number(form.price || 0)} / {form.rateType === 'hourly' ? 'hour' : 'day'}
+              </Typography>
+            </Box>
+            <Box sx={{ p: 1.2, borderRadius: 1.6, bgcolor: '#fff', border: '1px solid #e3e8ef' }}>
+              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>Advance Payments</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: form.acceptManualUpi ? '#166534' : '#92400e' }}>
+                {form.acceptManualUpi ? 'Enabled' : 'Disabled'}
               </Typography>
             </Box>
           </Box>
@@ -1975,29 +2178,9 @@ export default function GuideDashboard() {
                 sx={{
                   display: 'grid',
                   gap: 1.5,
-                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 120px 120px' },
+                  gridTemplateColumns: { xs: '1fr', sm: '180px 120px auto' },
                 }}
               >
-                <TextField
-                  label="Amount"
-                  name="price"
-                  value={form.price}
-                  onChange={handleChange}
-                  type="number"
-                  inputProps={{ step: 1, min: 0 }}
-                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
-                  placeholder="e.g., 2500"
-                />
-                <TextField
-                  select
-                  label="Currency"
-                  name="currency"
-                  value="INR"
-                  disabled
-                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
-                >
-                  <MenuItem value="INR">INR</MenuItem>
-                </TextField>
                 <TextField
                   select
                   label="Rate Type"
@@ -2009,11 +2192,207 @@ export default function GuideDashboard() {
                   <MenuItem value="hourly">Hour</MenuItem>
                   <MenuItem value="daily">Day</MenuItem>
                 </TextField>
+                <TextField
+                  select
+                  label="Currency"
+                  name="currency"
+                  value="INR"
+                  disabled
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                >
+                  <MenuItem value="INR">INR</MenuItem>
+                </TextField>
+                <Button
+                  variant="outlined"
+                  onClick={addServiceDestination}
+                  sx={{ textTransform: 'none', fontWeight: 700 }}
+                >
+                  + Add Destination
+                </Button>
+              </Box>
+
+              <Box sx={{ mt: 1.5, display: 'grid', gap: 1 }}>
+                {(Array.isArray(form.serviceDestinations) ? form.serviceDestinations : []).map((item, index) => (
+                  <Box
+                    key={`${item?._id || 'new'}_${index}`}
+                    sx={{
+                      display: 'grid',
+                      gap: 1,
+                      gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 150px auto' },
+                      alignItems: 'center',
+                    }}
+                  >
+                    <TextField
+                      label={`Destination ${index + 1}`}
+                      value={item?.destination || ''}
+                      onChange={handleServiceDestinationChange(index, 'destination')}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                      placeholder="e.g., Kolhapur"
+                    />
+                    <TextField
+                      label="Price (INR)"
+                      type="number"
+                      value={item?.price ?? ''}
+                      onChange={handleServiceDestinationChange(index, 'price')}
+                      inputProps={{ min: 1, step: 1 }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                    />
+                    <Button
+                      variant="text"
+                      color="error"
+                      onClick={() => removeServiceDestination(index)}
+                      sx={{ textTransform: 'none', fontWeight: 700 }}
+                    >
+                      Remove
+                    </Button>
+                  </Box>
+                ))}
               </Box>
 
               <Box sx={{ bgcolor: '#e8f5e9', p: 1.35, borderRadius: 1.5, border: '1px solid #81c784', mt: 1.5 }}>
                 <Typography variant="body2" sx={{ color: '#2e7d32', fontWeight: 700 }}>
-                  Your rate: INR {Number(form.price || 0)} per {form.rateType === 'hourly' ? 'hour' : 'day'}
+                  Starting rate: INR {Number(form.price || 0)} per {form.rateType === 'hourly' ? 'hour' : 'day'} (based on your destination-wise pricing)
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#2e7d32', display: 'block', mt: 0.4 }}>
+                  Add up to 5 local destinations. Tourists can book you only for these destinations.
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ bgcolor: '#f8fafc', p: { xs: 2, md: 2.5 }, borderRadius: 2, border: '1px solid #d7e3f3', mt: 2.4 }}>
+              <Typography fontWeight={800} mb={0.75} sx={{ fontSize: '1rem', color: '#1f2937' }}>
+                UPI Advance Payments
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={1.7}>
+                Tourists will pay only the advance amount online using your UPI QR or UPI ID. They can pay the remaining amount directly during the tour.
+              </Typography>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: 1.5,
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                }}
+              >
+                <TextField
+                  select
+                  label="Advance Payment Mode"
+                  name="acceptManualUpi"
+                  value={String(Boolean(form.acceptManualUpi))}
+                  onChange={handleChange}
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                >
+                  <MenuItem value="false">Disabled</MenuItem>
+                  <MenuItem value="true">Enabled</MenuItem>
+                </TextField>
+                <TextField
+                  label="UPI Payee Name"
+                  name="upiPayeeName"
+                  value={form.upiPayeeName}
+                  onChange={handleChange}
+                  placeholder="Guide Name"
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                />
+                <TextField
+                  label="UPI ID"
+                  name="upiId"
+                  value={form.upiId}
+                  onChange={handleChange}
+                  placeholder="name@bank"
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                />
+                <TextField
+                  select
+                  label="Advance Type"
+                  name="advancePaymentType"
+                  value={form.advancePaymentType}
+                  onChange={handleChange}
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                >
+                  <MenuItem value="percentage">Percentage of booking</MenuItem>
+                  <MenuItem value="fixed">Fixed amount</MenuItem>
+                </TextField>
+                <TextField
+                  label={form.advancePaymentType === 'percentage' ? 'Advance Percentage' : 'Advance Amount'}
+                  name="advancePaymentValue"
+                  value={form.advancePaymentValue}
+                  onChange={handleChange}
+                  type="number"
+                  inputProps={{
+                    min: 1,
+                    max: form.advancePaymentType === 'percentage' ? 100 : undefined,
+                    step: 1,
+                  }}
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                />
+                <TextField
+                  label="Guide Notes for Tourist"
+                  name="advancePaymentNotes"
+                  value={form.advancePaymentNotes}
+                  onChange={handleChange}
+                  placeholder="Example: Please mention destination name in the UPI note."
+                  multiline
+                  minRows={2}
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                />
+              </Box>
+
+              <Box sx={{ mt: 2, display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr auto' }, alignItems: 'start' }}>
+                <Box sx={{ bgcolor: '#fff', border: '1px solid #dbe3ef', borderRadius: 2, p: 2 }}>
+                  <Typography variant="subtitle2" fontWeight={800} mb={1}>
+                    Payment QR
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" mb={1.5}>
+                    Upload the QR that tourists can scan in Google Pay, PhonePe, Paytm, or any UPI app.
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    disabled={paymentQrUploading}
+                    sx={{ textTransform: 'none', fontWeight: 700, mr: 1 }}
+                  >
+                    {paymentQrUploading ? 'Uploading...' : 'Upload QR Image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={handlePaymentQrUpload}
+                    />
+                  </Button>
+                  {guideProfile?.upiQrImage && (
+                    <Button
+                      variant="text"
+                      color="error"
+                      disabled={paymentQrDeleting}
+                      onClick={handleDeletePaymentQr}
+                      sx={{ textTransform: 'none', fontWeight: 700 }}
+                    >
+                      {paymentQrDeleting ? 'Removing...' : 'Remove QR'}
+                    </Button>
+                  )}
+                </Box>
+
+                <Box sx={{ bgcolor: '#fff', border: '1px solid #dbe3ef', borderRadius: 2, p: 1.5, minWidth: { md: 220 } }}>
+                  {paymentQrImageUrl ? (
+                    <Box
+                      component="img"
+                      src={paymentQrImageUrl}
+                      alt="Guide payment QR"
+                      sx={{ width: '100%', maxWidth: 220, aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: 1.5, display: 'block', mx: 'auto' }}
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      No QR uploaded yet.
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+
+              <Box sx={{ bgcolor: form.acceptManualUpi ? '#ecfdf3' : '#fff7ed', p: 1.35, borderRadius: 1.5, border: `1px solid ${form.acceptManualUpi ? '#86efac' : '#fdba74'}`, mt: 1.7 }}>
+                <Typography variant="body2" sx={{ color: form.acceptManualUpi ? '#166534' : '#9a3412', fontWeight: 700 }}>
+                  {form.acceptManualUpi
+                    ? `Advance collection is enabled. Tourists will pay ${form.advancePaymentType === 'percentage' ? `${Number(form.advancePaymentValue || 0)}%` : `INR ${Number(form.advancePaymentValue || 0)}`} before you confirm the booking.`
+                    : 'Advance collection is disabled. Enable it only after you add a valid UPI ID, payee name, and QR.'}
                 </Typography>
               </Box>
             </Box>
@@ -2180,20 +2559,6 @@ export default function GuideDashboard() {
     </Box>
   );
 
-  // Handle create tour
-  const handleCreateTour = async (tourData) => {
-    try {
-      const res = await api.post(`/travelogue/submit`, {
-        ...tourData,
-        guideId: user._id
-      });
-      setTours(prev => [...prev, res.data.travelogue]);
-      alert('Tour created successfully!');
-    } catch (err) {
-      alert('Failed to create tour: ' + (err.response?.data?.message || err.message));
-    }
-  };
-
   const handleOpenChatFromBooking = (booking) => {
     const touristId = booking?.touristId?._id || booking?.touristId;
     if (!touristId) return;
@@ -2218,7 +2583,7 @@ export default function GuideDashboard() {
 
   const pageMap = {
     Dashboard: <DashboardPage user={user} bookings={bookings} guideProfile={guideProfile} guideReviews={guideReviews} tours={tours} />,
-    'My Tours': <MyToursPage tours={tours} onCreateTour={handleCreateTour} />,
+    'My Tours': <GuideTourManager tours={tours} bookings={bookings} onToursChange={setTours} onRefreshTours={fetchGuideData} />,
     Bookings: <BookingsPage bookings={bookings} refreshBookings={fetchGuideData} onOpenChat={handleOpenChatFromBooking} />,
     Calendar: <CalendarPage />,
     Messages: <MessagesPage user={user} preselectedTouristId={chatOpenRequest.touristId} preselectToken={chatOpenRequest.token} onTouristsChange={handleGuideTouristsChange} />,

@@ -11,6 +11,7 @@ import AppBarTop from './components/AppBarTop';
 import SidebarNav from './components/SidebarNav';
 
 import ExploreGuides from './components/ExploreGuides';
+import ExploreTours from './components/ExploreTours';
 import ExploreHotels from './components/ExploreHotels';
 import ExploreDestinations from './components/ExploreDestinations';
 import MyBookings from './components/MyBookings';
@@ -88,7 +89,7 @@ function TouristDashboard() {
   });
   const isMobile = useMediaQuery('(max-width:900px)');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('Dashboard');
+  const [selectedTab, setSelectedTab] = useState('Explore Tours');
   const [weatherModal, setWeatherModal] = useState(false);
   const [travelogueSubTab, setTravelogueSubTab] = useState('create');
   const [reviewsRefreshTrigger, setReviewsRefreshTrigger] = useState(0);
@@ -231,6 +232,7 @@ function TouristDashboard() {
         Hotels: 'Hotel Booking',
         Profile: 'Profile',
         ExploreDestinations: 'Explore Destinations',
+        ExploreTours: 'Explore Tours',
         Dashboard: 'Dashboard',
         VirtualGuide: 'Virtual Guide',
         GuideAI: 'Virtual Guide',
@@ -279,6 +281,7 @@ function TouristDashboard() {
   // Sidebar navigation items (Profile and Settings removed - now in top-right profile menu)
   const navItems = [
     { label: 'Dashboard', value: 'Dashboard' },
+    { label: 'Explore Tours', value: 'Explore Tours' },
     { label: 'Explore Guides', value: 'Explore Guides' },
     { label: 'Virtual Guide', value: 'Virtual Guide' },
     { label: 'Itinerary Planner', value: 'Itinerary Planner' },
@@ -379,6 +382,25 @@ function TouristDashboard() {
             </Box>
           )}
           {selectedTab === 'Explore Destinations' && <ExploreDestinations />}
+          {selectedTab === 'Explore Tours' && (
+            <ExploreTours
+              onOpenGuideProfile={({ guideUserId, guideName }) => {
+                setSelectedTab('Explore Guides');
+                setTimeout(() => {
+                  dispatchAgentEvent('agentExploreGuidesPrefill', {
+                    guideUserId,
+                    guideName,
+                    search: guideName || '',
+                    openProfile: true
+                  });
+                }, 0);
+              }}
+              onOpenChat={(target) => {
+                setChatTarget(target);
+                setSelectedTab('Chat');
+              }}
+            />
+          )}
           {selectedTab === 'Explore Guides' && <ExploreGuides refreshTrigger={reviewsRefreshTrigger} />}
           {selectedTab === 'Virtual Guide' && <VirtualGuide />}
           {selectedTab === 'Itinerary Planner' && <ItineraryPlannerModule />}

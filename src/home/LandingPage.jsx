@@ -128,6 +128,9 @@ export default function LandingPage() {
       <section id="about" className="lp-section lp-cta">
         <h2>Ready to Start Your Journey?</h2>
         <p>Join thousands of travelers who trust Travelogue for their adventures</p>
+        <p className="lp-admin-note">
+          Admin access is issued by the system only. New registrations are available for Tourist, Guide, and Hotel accounts.
+        </p>
         <button type="button" onClick={() => navigate('/register')}>Get Started Today</button>
       </section>
 

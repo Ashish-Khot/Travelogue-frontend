@@ -22,7 +22,6 @@ import BookGuideDialog from './BookGuideDialog';
 import GuideDetailModal from './GuideDetailModal';
 
 import api from '../../api';
-import dayjs from 'dayjs';
 
 export default function ExploreGuides({ refreshTrigger = 0 }) {
   const [guides, setGuides] = useState([]);
@@ -42,6 +41,7 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
   const [viewMode, setViewMode] = useState('grid');
   const [loading, setLoading] = useState(true);
   const [agentBookingRequest, setAgentBookingRequest] = useState(null);
+  const [agentProfileRequest, setAgentProfileRequest] = useState(null);
   const [favorites, setFavorites] = useState(
     JSON.parse(localStorage.getItem('favoriteGuides') || '[]')
   );
@@ -57,6 +57,12 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
       if (payload.availability) setAvailabilityFilter(payload.availability);
       if (payload.openBooking) {
         setAgentBookingRequest({
+          guideUserId: payload.guideUserId || '',
+          guideName: payload.guideName || payload.search || '',
+        });
+      }
+      if (payload.openProfile) {
+        setAgentProfileRequest({
           guideUserId: payload.guideUserId || '',
           guideName: payload.guideName || payload.search || '',
         });
@@ -157,6 +163,16 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
               const rawAvatar =
                 g.userId?.avatar || g.userId?.profileImage || g.avatar || '';
               const eligibleReviewBooking = eligibleReviewByGuideId[String(guideUserId)] || null;
+              const serviceDestinations = (Array.isArray(g.serviceDestinations) ? g.serviceDestinations : [])
+                .map((item) => ({
+                  _id: String(item?._id || ''),
+                  destination: String(item?.destination || '').trim(),
+                  price: Number(item?.price || 0)
+                }))
+                .filter((item) => item.destination && Number.isFinite(item.price) && item.price > 0);
+              const startingPrice = serviceDestinations.length > 0
+                ? Math.min(...serviceDestinations.map((item) => item.price))
+                : Number(g.price || 0);
 
               return {
                 _id: g._id,
@@ -166,9 +182,10 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
                 location: g.userId.country || 'Global',
                 languages: languageList,
                 languageNames,
-                price: g.price || 0,
+                price: startingPrice || 0,
                 currency: 'INR',
                 rateType: g.rateType || 'daily',
+                serviceDestinations,
                 rating: averageRating,
                 description: g.bio || 'Experienced local guide with passion for sharing culture',
                 tags: g.tags || ['Local Expert', 'Friendly', 'Experienced'],
@@ -195,6 +212,13 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
                 verifiedPhone: g.verifiedPhone || false,
                 verifiedID: g.verifiedID || false,
                 verifiedPayment: g.verifiedPayment || false,
+                acceptManualUpi: Boolean(g.acceptManualUpi),
+                upiId: g.upiId || '',
+                upiPayeeName: g.upiPayeeName || '',
+                upiQrImage: g.upiQrImage || '',
+                advancePaymentType: g.advancePaymentType || 'percentage',
+                advancePaymentValue: Number(g.advancePaymentValue || 0),
+                advancePaymentNotes: g.advancePaymentNotes || '',
                 lastBookingDate: g.lastBookingDate,
                 daysSinceBooking: daysSinceBooking,
                 guestSatisfaction,
@@ -232,11 +256,15 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
   );
 
   const filteredGuides = guides.filter((guide) => {
+    const normalizedSearch = search.toLowerCase();
     const matchesSearch =
-      guide.name.toLowerCase().includes(search.toLowerCase()) ||
-      guide.location.toLowerCase().includes(search.toLowerCase()) ||
+      guide.name.toLowerCase().includes(normalizedSearch) ||
+      guide.location.toLowerCase().includes(normalizedSearch) ||
+      (guide.serviceDestinations || []).some((item) =>
+        String(item?.destination || '').toLowerCase().includes(normalizedSearch)
+      ) ||
       (guide.languageNames || []).some((lang) =>
-        lang.toLowerCase().includes(search.toLowerCase())
+        lang.toLowerCase().includes(normalizedSearch)
       );
 
     const matchesLanguage =
@@ -274,6 +302,27 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
     setAgentBookingRequest(null);
   }, [agentBookingRequest, guides, loading]);
 
+  useEffect(() => {
+    if (!agentProfileRequest || loading || !guides.length) return;
+
+    const byUserId = agentProfileRequest.guideUserId
+      ? guides.find((guide) => String(guide.userId) === String(agentProfileRequest.guideUserId))
+      : null;
+
+    const byName = !byUserId && agentProfileRequest.guideName
+      ? guides.find((guide) =>
+          guide.name?.toLowerCase().includes(agentProfileRequest.guideName.toLowerCase())
+        )
+      : null;
+
+    const targetGuide = byUserId || byName;
+    if (targetGuide) {
+      setDetailModalGuide(targetGuide);
+      setDetailModalOpen(true);
+    }
+    setAgentProfileRequest(null);
+  }, [agentProfileRequest, guides, loading]);
+
   const isFavorite = (guide) => {
     return favorites.some((fav) => fav._id === guide._id);
   };
@@ -301,6 +350,11 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
       setSnackbarSeverity('warning');
       return;
     }
+    if (!Array.isArray(guide?.serviceDestinations) || guide.serviceDestinations.length === 0) {
+      setSuccessMsg('This guide has not configured local destinations yet.');
+      setSnackbarSeverity('warning');
+      return;
+    }
     setSelectedGuide(guide);
     setDialogOpen(true);
   };
@@ -320,55 +374,11 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
     setDetailModalGuide(null);
   };
 
-  const handleConfirm = async ({
-    destination,
-    startDate,
-    endDate,
-    startTime,
-    endTime,
-    totalPrice,
-  }) => {
-    if (!selectedGuide || !startDate || !endDate || !startTime || !endTime)
-      return;
-    try {
-      const guideId = selectedGuide.userId;
-      const startDateTime = dayjs(startDate)
-        .hour(dayjs(startTime).hour())
-        .minute(dayjs(startTime).minute())
-        .second(0)
-        .toISOString();
-      const endDateTime = dayjs(endDate)
-        .hour(dayjs(endTime).hour())
-        .minute(dayjs(endTime).minute())
-        .second(0)
-        .toISOString();
-      const response = await api.post('/booking/book', {
-        guideId,
-        startDateTime,
-        endDateTime,
-        destination,
-        price: totalPrice,
-      });
-      if (response.status === 201) {
-        setSuccessMsg('Successfully booked guide!');
-        setSnackbarSeverity('success');
-      } else {
-        const backendMsg =
-          response?.data?.message || 'Booking failed. Please try again.';
-        setSuccessMsg(`Booking failed: ${backendMsg}`);
-        setSnackbarSeverity('error');
-      }
-    } catch (err) {
-      const backendMsg =
-        err?.response?.data?.message ||
-        err.message ||
-        'Booking failed. Please try again.';
-      setSuccessMsg(`Booking failed: ${backendMsg}`);
-      setSnackbarSeverity('error');
-    } finally {
-      setDialogOpen(false);
-      setSelectedGuide(null);
-    }
+  const handleConfirm = ({ message, severity = 'success' }) => {
+    setSuccessMsg(message || 'Advance payment submitted successfully.');
+    setSnackbarSeverity(severity);
+    setDialogOpen(false);
+    setSelectedGuide(null);
   };
 
   return (

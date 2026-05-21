@@ -225,6 +225,11 @@ export default function Login() {
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
+            <Typography className={styles.securityNotice}>
+              {selectedRole === "admin"
+                ? "Admin sign-in is restricted to system-assigned email and password only."
+                : "Use the same role and credentials you registered with."}
+            </Typography>
 
             <form onSubmit={handleSubmit} className={styles.form}>
               <TextField

@@ -93,6 +93,44 @@ const getNights = (checkIn, checkOut) => {
   return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
 };
 
+const toStartOfDay = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getAllowedStatusOptions = (booking) => {
+  const currentStatus = String(booking?.status || STATUS_PENDING).toLowerCase();
+  const options = new Set([currentStatus]);
+  const today = toStartOfDay(new Date());
+  const checkIn = toStartOfDay(booking?.checkIn);
+  const checkOut = toStartOfDay(booking?.checkOut);
+  const canCheckInNow = Boolean(today && checkIn && checkOut) && today >= checkIn && today < checkOut;
+  const canCompleteNow = Boolean(today && checkOut) && today > checkOut;
+
+  if (currentStatus === STATUS_PENDING) {
+    options.add(STATUS_CONFIRMED);
+    options.add(STATUS_CANCELLED);
+  } else if (currentStatus === STATUS_CONFIRMED) {
+    options.add(STATUS_CANCELLED);
+    if (canCheckInNow) options.add(STATUS_CHECKED_IN);
+    if (canCompleteNow) options.add(STATUS_COMPLETED);
+  } else if (currentStatus === STATUS_CHECKED_IN) {
+    if (canCompleteNow) options.add(STATUS_COMPLETED);
+  }
+
+  const preferredOrder = [
+    STATUS_PENDING,
+    STATUS_CONFIRMED,
+    STATUS_CHECKED_IN,
+    STATUS_COMPLETED,
+    STATUS_CANCELLED,
+  ];
+
+  return preferredOrder.filter((status) => options.has(status));
+};
+
 export default function HotelBookings({ showHeader = true }) {
   const { t } = useTranslation();
   const [bookings, setBookings] = useState([]);
@@ -381,6 +419,8 @@ export default function HotelBookings({ showHeader = true }) {
             filteredBookings.map((booking) => {
               const roomCount = Math.max(1, Number(booking.roomCount) || 1);
               const nights = getNights(booking.checkIn, booking.checkOut);
+              const allowedStatusOptions = getAllowedStatusOptions(booking);
+              const isStatusLocked = allowedStatusOptions.length <= 1;
               return (
                 <Box
                   key={`mobile-${booking._id}`}
@@ -431,7 +471,7 @@ export default function HotelBookings({ showHeader = true }) {
                       size="small"
                       value={booking.status}
                       onChange={(event) => handleStatusChange(booking._id, event.target.value)}
-                      disabled={updatingId === booking._id || booking.status === STATUS_COMPLETED}
+                      disabled={updatingId === booking._id || isStatusLocked}
                       sx={{
                         minWidth: 138,
                         borderRadius: 1.5,
@@ -439,8 +479,7 @@ export default function HotelBookings({ showHeader = true }) {
                         "& .MuiSelect-select": { py: 0.75, fontWeight: 700, fontSize: 13.5 },
                       }}
                     >
-                      {statusOptions
-                        .filter((status) => status !== STATUS_ALL)
+                      {allowedStatusOptions
                         .map((status) => (
                           <MenuItem key={status} value={status}>
                             {getStatusLabel(status)}
@@ -484,6 +523,8 @@ export default function HotelBookings({ showHeader = true }) {
                 filteredBookings.map((booking) => {
                   const roomCount = Math.max(1, Number(booking.roomCount) || 1);
                   const nights = getNights(booking.checkIn, booking.checkOut);
+                  const allowedStatusOptions = getAllowedStatusOptions(booking);
+                  const isStatusLocked = allowedStatusOptions.length <= 1;
                   return (
                     <TableRow
                       key={booking._id}
@@ -570,7 +611,7 @@ export default function HotelBookings({ showHeader = true }) {
                           size="small"
                           value={booking.status}
                           onChange={(event) => handleStatusChange(booking._id, event.target.value)}
-                          disabled={updatingId === booking._id || booking.status === STATUS_COMPLETED}
+                          disabled={updatingId === booking._id || isStatusLocked}
                           sx={{
                             minWidth: 155,
                             textAlign: "left",
@@ -579,8 +620,7 @@ export default function HotelBookings({ showHeader = true }) {
                             "& .MuiSelect-select": { py: 0.85, fontWeight: 700 },
                           }}
                         >
-                          {statusOptions
-                            .filter((status) => status !== STATUS_ALL)
+                          {allowedStatusOptions
                             .map((status) => (
                               <MenuItem key={status} value={status}>
                                 {getStatusLabel(status)}
