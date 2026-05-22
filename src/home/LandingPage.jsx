@@ -2,31 +2,10 @@
 import { useNavigate } from 'react-router-dom';
 import './LandingPage.css';
 
-const DESTINATIONS = [
-  {
-    title: 'Swiss Alps',
-    location: 'Switzerland',
-    price: '₹1,20,000 - ₹2,50,000',
-    image: 'https://images.unsplash.com/photo-1508261305436-4b35c91f6d2f?auto=format&fit=crop&w=1200&q=80',
-  },
-  {
-    title: 'Coastal Paradise',
-    location: 'Mediterranean',
-    price: '₹80,000 - ₹1,80,000',
-    image: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=1200&q=80',
-  },
-  {
-    title: 'Mountain Retreat',
-    location: 'Norway',
-    price: '₹1,00,000 - ₹2,20,000',
-    image: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=1200&q=80',
-  },
-];
-
 const FEATURES = [
   {
     title: 'Smart Route Planner',
-    copy: 'Plan realistic routes with live alternatives for road, flight, and local transfers.',
+    copy: 'Plan realistic routes with live alternatives for road, rail, and local transfers.',
   },
   {
     title: 'Verified Local Experts',
@@ -40,9 +19,6 @@ const FEATURES = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const fallbackImage =
-    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
-  const visibleDestinations = DESTINATIONS;
 
   const scrollToSection = (id) => {
     const node = document.getElementById(id);
@@ -58,7 +34,6 @@ export default function LandingPage() {
           <span className="lp-brand-mark">Travelogue</span>
         </button>
         <nav className="lp-nav">
-          <button type="button" onClick={() => scrollToSection('destinations')}>Destinations</button>
           <button type="button" onClick={() => scrollToSection('features')}>Features</button>
           <button type="button" onClick={() => scrollToSection('about')}>About</button>
         </nav>
@@ -77,36 +52,6 @@ export default function LandingPage() {
           <p>
             Explore breathtaking destinations, connect with expert guides, and create unforgettable memories.
           </p>
-        </div>
-      </section>
-
-      <section id="destinations" className="lp-section lp-destinations">
-        <div className="lp-heading">
-          <h2>Featured Destinations</h2>
-          <p>Handpicked locations for your next journey</p>
-        </div>
-        <div className="lp-cards">
-          {visibleDestinations.map((item) => (
-            <article key={`${item.title}-${item.lat ?? item.location}`} className="lp-card">
-              <img
-                src={item.image}
-                alt={item.title}
-                loading="lazy"
-                onError={(event) => {
-                  event.currentTarget.src = fallbackImage;
-                }}
-              />
-              <div className="lp-card-body">
-                <h3>{item.title}</h3>
-                <p className="lp-location">{item.location}</p>
-                {item.description && <p className="lp-card-copy">{item.description}</p>}
-                <div className="lp-card-row">
-                  <strong>{item.price}</strong>
-                  <button type="button" onClick={() => navigate('/login')}>View Details</button>
-                </div>
-              </div>
-            </article>
-          ))}
         </div>
       </section>
 
