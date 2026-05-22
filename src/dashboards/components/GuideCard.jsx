@@ -40,6 +40,7 @@ export default function GuideCard({
   onViewReviews,
   isFavorite = false,
   onFavoriteToggle = () => {},
+  viewMode = 'grid',
 }) {
   const [liked, setLiked] = useState(Boolean(isFavorite));
   const [videoOpen, setVideoOpen] = useState(false);
@@ -55,7 +56,7 @@ export default function GuideCard({
     return imageItem || tourMedia[0];
   })();
   const coverKind = getMediaKind(coverMedia);
-  const coverSrc = coverMedia?.url || guide.avatar;
+  const coverSrc = guide.avatar || coverMedia?.url || '';
   const serviceDestinations = Array.isArray(guide.serviceDestinations)
     ? guide.serviceDestinations.filter((item) => item?.destination)
     : [];
@@ -108,7 +109,8 @@ export default function GuideCard({
           overflow: 'hidden',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: { xs: 'column', md: viewMode === 'list' ? 'row' : 'column' },
+          minWidth: 0,
           transition: 'all 0.25s ease',
           cursor: 'pointer',
           '&:hover': {
@@ -118,14 +120,24 @@ export default function GuideCard({
           },
         }}
       >
-        <Box sx={{ position: 'relative', height: 220, bgcolor: '#eef2f7' }}>
+        <Box
+          sx={{
+            position: 'relative',
+            bgcolor: '#eef2f7',
+            width: { xs: '100%', md: viewMode === 'list' ? 300 : '100%' },
+            minWidth: { md: viewMode === 'list' ? 300 : 0 },
+            flexShrink: 0,
+            height: viewMode === 'list' ? { xs: 220, md: 'auto' } : 220,
+            aspectRatio: viewMode === 'list' ? { xs: '16 / 10', md: '4 / 3' } : '16 / 10',
+          }}
+        >
           {coverKind === 'video' && coverMedia?.url ? (
             <Box
               component="video"
               src={buildMediaUrl(coverMedia.url)}
               muted
               preload="metadata"
-              sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              sx={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', display: 'block' }}
             />
           ) : (
             <PremiumImage
@@ -139,6 +151,7 @@ export default function GuideCard({
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
+                objectPosition: 'center 25%',
               }}
             />
           )}
@@ -219,7 +232,7 @@ export default function GuideCard({
           )}
         </Box>
 
-        <Box sx={{ p: 1.8, display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
+        <Box sx={{ p: 1.8, display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" gap={0.6}>
             <Typography
               sx={{
@@ -228,6 +241,7 @@ export default function GuideCard({
                 fontSize: '1.02rem',
                 lineHeight: 1.2,
                 flex: 1,
+                minWidth: 0,
               }}
             >
               {guide.name}
@@ -316,7 +330,7 @@ export default function GuideCard({
               {serviceDestinations.slice(0, 2).map((item, idx) => (
                 <Chip
                   key={`${item.destination}-${idx}`}
-                  label={`${item.destination} Â· INR ${Number(item.price || 0)}`}
+                  label={`${item.destination} · INR ${Number(item.price || 0)}`}
                   size="small"
                   sx={{
                     height: 23,
@@ -324,7 +338,8 @@ export default function GuideCard({
                     color: '#9a3412',
                     border: '1px solid #fed7aa',
                     fontWeight: 700,
-                    fontSize: '0.68rem'
+                    fontSize: '0.68rem',
+                    maxWidth: '100%',
                   }}
                 />
               ))}

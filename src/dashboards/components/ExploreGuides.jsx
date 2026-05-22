@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
-  Grid,
   Snackbar,
   Alert,
   Container,
@@ -281,6 +280,14 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
     return matchesSearch && matchesLanguage && matchesRating && matchesPrice && matchesRateType && matchesAvailability;
   });
 
+  const cardsGridColumns = viewMode === 'list'
+    ? '1fr'
+    : {
+      xs: '1fr',
+      sm: 'repeat(2, minmax(0, 1fr))',
+      md: 'repeat(3, minmax(0, 1fr))',
+    };
+
   useEffect(() => {
     if (!agentBookingRequest || loading || !guides.length) return;
 
@@ -490,20 +497,18 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
 
         {/* Guides Grid */}
         {!loading && filteredGuides.length > 0 && (
-          <Grid
-            container
-            spacing={3.5}
+          <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: viewMode === 'list' 
-                ? '1fr' 
-                : { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(3, 1fr)', xl: 'repeat(3, 1fr)' },
+              gridTemplateColumns: cardsGridColumns,
               gap: 3.5,
+              alignItems: 'stretch',
             }}
           >
             {filteredGuides.map((guide) => (
               <Box
                 key={guide._id}
+                sx={{ minWidth: 0, display: 'flex' }}
               >
                 <GuideCard
                   guide={guide}
@@ -511,25 +516,28 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
                   onViewReviews={handleViewProfile}
                   isFavorite={isFavorite(guide)}
                   onFavoriteToggle={toggleFavorite}
+                  viewMode={viewMode}
                 />
               </Box>
             ))}
-          </Grid>
+          </Box>
         )}
 
         {/* Loading State */}
         {loading && (
-          <Grid
-            container
-            spacing={3.5}
+          <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(3, 1fr)', xl: 'repeat(3, 1fr)' },
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                md: 'repeat(3, minmax(0, 1fr))',
+              },
               gap: 3.5,
             }}
           >
             {[1, 2, 3, 4, 5, 6].map((idx) => (
-              <Box key={idx}>
+              <Box key={idx} sx={{ minWidth: 0 }}>
                 <Paper sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
                   <Skeleton variant="rectangular" height={220} />
                   <Box sx={{ p: 1.8 }}>
@@ -541,7 +549,7 @@ export default function ExploreGuides({ refreshTrigger = 0 }) {
                 </Paper>
               </Box>
             ))}
-          </Grid>
+          </Box>
         )}
       </Container>
 
